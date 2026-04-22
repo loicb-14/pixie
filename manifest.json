@@ -1,0 +1,16 @@
+{
+  "name": "Pixie",
+  "short_name": "Pixie",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FDF6EE",
+  "theme_color": "#E8845A",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
