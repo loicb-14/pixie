@@ -10,7 +10,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #FDF6EE; font-family: 'Georgia', serif; }
+    body { background: #FDF6EE; font-family: Georgia, serif; }
   </style>
 </head>
 <body>
@@ -24,6 +24,7 @@
   </script>
   <script type="text/babel">
     const { useState, useEffect, useCallback } = React;
+
 
 const t = {
   bg: "#FDF6EE", card: "#FFFFFF", primary: "#E8845A", primaryLight: "#FDEEE6",
@@ -817,7 +818,7 @@ function SettingsView({ notifEnabled, setNotifEnabled, role, events, persons, av
   );
 }
 
-export default function PixieApp() {
+function PixieApp() {
   const { load, save } = useStorage();
   const [role, setRole] = useState(null);
   const [tab, setTab] = useState("calendar");
@@ -899,6 +900,7 @@ export default function PixieApp() {
     </div>
   );
 }
+
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(React.createElement(PixieApp));
