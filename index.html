@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Pixie</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Pixie" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #FDF6EE; font-family: 'Georgia', serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script>
+    const SUPABASE_URL = "https://wdfynelkfgcoxycabrfp.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndkZnluZWxrZmdjb3h5Y2FicmZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NDQ1NjksImV4cCI6MjA5MjQyMDU2OX0.rQzCAlc1viHfChSZbyLMrmiNj38UNaA44T981RcK06Q";
+  </script>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback } = React;
+
+const t = {
+  bg: "#FDF6EE", card: "#FFFFFF", primary: "#E8845A", primaryLight: "#FDEEE6",
+  secondary: "#6B9E8A", secondaryLight: "#EAF4F0", accent: "#F2C46D", accentLight: "#FEF8E7",
+  purple: "#9B7EC8", purpleLight: "#F2ECFB", text: "#2C2416", textMid: "#7A6A58",
+  textLight: "#B0A090", border: "#EDE4D8", danger: "#E05C5C", dangerLight: "#FEE8E8",
+  shadow: "0 4px 24px rgba(44,36,22,0.08)", radius: "16px", radiusSm: "10px",
+  green: "#4CAF82", greenLight: "#E8F5EE",
+  amber: "#E8A030", amberLight: "#FEF3E2",
+};
+
+const LAYERS = [
+  { id: "walk", label: "Balades", color: t.secondary, icon: "🐾" },
+  { id: "treatment", label: "Traitements", color: t.purple, icon: "💊" },
+  { id: "vet", label: "Véto", color: t.primary, icon: "🏥" },
+  { id: "other", label: "Autre", color: t.accent, icon: "📌" },
+];
+const TIMES_OF_DAY = [
+  { id: "morning", label: "Matin", icon: "🌅", hour: 8 },
+  { id: "noon", label: "Midi", icon: "☀️", hour: 12 },
+  { id: "afternoon", label: "Après-midi", icon: "🌤️", hour: 15 },
+  { id: "evening", label: "Soir", icon: "🌙", hour: 19 },
+];
+const PERSON_ROLES = {
+  guardian: { label: "Gardien principal", icon: "🛡️", desc: "Accès complet, répond aux demandes" },
+  temp: { label: "Intervenant ponctuel", icon: "👤", desc: "Reçoit uniquement un récap par SMS" },
+};
+const ROLES = { owner: { label: "Propriétaire", icon: "👑" }, guardian: { label: "Gardien principal", icon: "🛡️" } };
+
+const uid = () => Math.random().toString(36).slice(2, 10);
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const fmtDate = (d) => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+const fmtShort = (d) => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+const fmtShortNum = (d) => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+const layerFor = (id) => LAYERS.find(l => l.id === id) || LAYERS[3];
+const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+const firstDayOfMonth = (y, m) => (new Date(y, m, 1).getDay() + 6) % 7;
+const getWeekDays = (base) => {
+  const d = new Date(base + "T12:00:00");
+  const off = (d.getDay() + 6) % 7;
+  const mon = new Date(d); mon.setDate(d.getDate() - off);
+  return Array.from({ length: 7 }, (_, i) => { const nd = new Date(mon); nd.setDate(mon.getDate() + i); return nd.toISOString().slice(0, 10); });
+};
+
+const useStorage = () => {
+  const load = useCallback(async (key) => {
+    try {
+      const res = await fetch(SUPABASE_URL + '/rest/v1/pixie_storage?key=eq.' + encodeURIComponent(key), {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+      });
+      const data = await res.json();
+      if (data && data.length > 0) return JSON.parse(data[0].value);
+      return null;
+    } catch { return null; }
+  }, []);
+  const save = useCallback(async (key, value) => {
+    try {
+      await fetch(SUPABASE_URL + '/rest/v1/pixie_storage', {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({ key, value: JSON.stringify(value), updated_at: new Date().toISOString() })
+      });
+    } catch {}
+  }, []);
+  return { load, save };
+};
+const sendNotif = (title, body) => { if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(title, { body }); };
+
+const Card = ({ children, style, onClick }) => (
+  <div onClick={onClick} style={{ background: t.card, borderRadius: t.radius, boxShadow: t.shadow, border: `1px solid ${t.border}`, cursor: onClick ? "pointer" : "default", ...style }}>{children}</div>
+);
+const Btn = ({ children, onClick, variant = "primary", small, style, disabled }) => {
+  const v = { primary: { background: t.primary, color: "#fff", border: "none" }, secondary: { background: t.secondaryLight, color: t.secondary, border: `1px solid ${t.secondary}44` }, ghost: { background: "transparent", color: t.textMid, border: `1px solid ${t.border}` }, danger: { background: t.dangerLight, color: t.danger, border: `1px solid ${t.danger}44` }, success: { background: t.secondaryLight, color: t.secondary, border: `1px solid ${t.secondary}` } };
+  return <button onClick={onClick} disabled={disabled} style={{ ...v[variant], borderRadius: t.radiusSm, padding: small ? "6px 14px" : "10px 20px", fontSize: small ? 12 : 14, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, fontFamily: "inherit", transition: "all 0.15s", ...style }}>{children}</button>;
+};
+const Tag = ({ color, children, small }) => <span style={{ background: color + "22", color, border: `1px solid ${color}44`, borderRadius: 20, padding: small ? "2px 8px" : "4px 12px", fontSize: small ? 11 : 12, fontWeight: 600, whiteSpace: "nowrap" }}>{children}</span>;
+const Field = ({ label, children, style }) => <div style={{ display: "flex", flexDirection: "column", gap: 6, ...style }}>{label && <label style={{ fontSize: 12, fontWeight: 600, color: t.textMid }}>{label}</label>}{children}</div>;
+const iStyle = { border: `1.5px solid ${t.border}`, borderRadius: t.radiusSm, padding: "10px 14px", fontSize: 14, color: t.text, background: t.bg, outline: "none", fontFamily: "inherit", width: "100%", boxSizing: "border-box" };
+const Input = ({ label, value, onChange, type = "text", placeholder, style }) => <Field label={label} style={style}><input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={iStyle} /></Field>;
+const Sel = ({ label, value, onChange, options, style }) => <Field label={label} style={style}><select value={value} onChange={e => onChange(e.target.value)} style={iStyle}>{options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></Field>;
+const Txtarea = ({ label, value, onChange, placeholder, style }) => <Field label={label} style={style}><textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={3} style={{ ...iStyle, resize: "vertical" }} /></Field>;
+const Modal = ({ title, onClose, children }) => (
+  <div style={{ position: "fixed", inset: 0, background: "rgba(44,36,22,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
+    <Card style={{ width: "100%", maxWidth: 480, maxHeight: "92vh", overflow: "auto" }}>
+      <div style={{ padding: "18px 24px", borderBottom: `1px solid ${t.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: t.card, zIndex: 1 }}>
+        <span style={{ fontSize: 16, fontWeight: 700, color: t.text }}>{title}</span>
+        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: t.textMid, lineHeight: 1 }}>×</button>
+      </div>
+      <div style={{ padding: 24 }}>{children}</div>
+    </Card>
+  </div>
+);
+
+function DosePicker({ doses, setDoses, persons }) {
+  const addDose = () => setDoses(ds => [...ds, { id: uid(), mode: "tod", timeOfDay: "morning", exactTime: "", personId: "__self_owner__" }]);
+  const upd = (id, field, val) => setDoses(ds => ds.map(d => d.id === id ? { ...d, [field]: val } : d));
+  const rem = (id) => setDoses(ds => ds.filter(d => d.id !== id));
+  const personOptions = [
+    { value: "__self_owner__", label: "Moi" },
+    ...persons.filter(p => p.role === "guardian").map(p => ({ value: p.id, label: `🛡️ ${p.name}` })),
+    ...persons.filter(p => p.role === "temp").map(p => ({ value: p.id, label: `👤 ${p.name}` })),
+  ];
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: t.textMid }}>Prises ({doses.length})</label>
+        <Btn onClick={addDose} small variant="secondary">+ Ajouter une prise</Btn>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {doses.map((dose, i) => (
+          <div key={dose.id} style={{ background: t.purpleLight, borderRadius: t.radiusSm, padding: "12px 14px", position: "relative" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: t.purple, marginBottom: 8 }}>Prise {i + 1}</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              {[{ id: "tod", label: "Moment" }, { id: "exact", label: "Heure précise" }].map(m => (
+                <button key={m.id} onClick={() => upd(dose.id, "mode", m.id)} style={{ flex: 1, padding: "6px", borderRadius: t.radiusSm, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1.5px solid ${t.purple}44`, background: dose.mode === m.id ? t.purple : "transparent", color: dose.mode === m.id ? "#fff" : t.purple, fontFamily: "inherit" }}>{m.label}</button>
+              ))}
+            </div>
+            {dose.mode === "tod"
+              ? <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{TIMES_OF_DAY.map(tod => <button key={tod.id} onClick={() => upd(dose.id, "timeOfDay", tod.id)} style={{ padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1.5px solid ${t.purple}44`, background: dose.timeOfDay === tod.id ? t.purple : "transparent", color: dose.timeOfDay === tod.id ? "#fff" : t.text, fontFamily: "inherit" }}>{tod.icon} {tod.label}</button>)}</div>
+              : <input type="time" value={dose.exactTime} onChange={e => upd(dose.id, "exactTime", e.target.value)} style={{ ...iStyle, width: "auto", marginBottom: 8 }} />}
+            <select value={dose.personId || "__self_owner__"} onChange={e => upd(dose.id, "personId", e.target.value)} style={{ ...iStyle, fontSize: 12, padding: "6px 10px" }}>
+              {personOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            {doses.length > 1 && <button onClick={() => rem(dose.id)} style={{ position: "absolute", top: 10, right: 10, background: "none", border: "none", cursor: "pointer", color: t.danger, fontSize: 16 }}>×</button>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EventCard({ ev, persons, role, onDelete, onTrack, onReassignDose, onReassignTx }) {
+  const layer = layerFor(ev.layer);
+  const personName = ev.personId === "__self_owner__"
+    ? (role === "owner" ? "Moi" : "Propriétaire")
+    : ev.personId === "__self_guardian__"
+      ? (role === "guardian" ? "Moi" : persons.find(p => p.role === "guardian")?.name || "Gardien")
+      : persons.find(p => p.id === ev.personId)?.name;
+  const person = personName ? { name: personName } : null;
+  const [showTrack, setShowTrack] = useState(false);
+  const [trackDoseId, setTrackDoseId] = useState(null);
+  const [reassignDoseId, setReassignDoseId] = useState(null);
+  const [obs, setObs] = useState("");
+  const hasDoses = ev.doses && ev.doses.length > 1;
+  const allTracked = hasDoses ? ev.doses.every(d => d.tracked) : !!ev.tracked;
+  const handleTrackSingle = (status) => { onTrack(ev.id, status, obs, null); setShowTrack(false); setObs(""); };
+  const handleTrackDose = (doseId, status) => { onTrack(ev.id, status, obs, doseId); setTrackDoseId(null); setObs(""); };
+
+  const resolveDosePersonName = (pid) => {
+    if (!pid || pid === "__self_owner__") return role === "owner" ? "Moi" : "Propriétaire";
+    if (pid === "__self_guardian__") return role === "guardian" ? "Moi" : (persons.find(p=>p.role==="guardian")?.name || "Gardien");
+    return persons.find(p => p.id === pid)?.name || null;
+  };
+  const resolveTxPersonName = () => {
+    const pid = ev.txPersonId;
+    if (!pid || pid === "__self_owner__") return role === "owner" ? "Moi" : "Propriétaire";
+    if (pid === "__self_guardian__") return role === "guardian" ? "Moi" : (persons.find(p=>p.role==="guardian")?.name || "Gardien");
+    return persons.find(p => p.id === pid)?.name || null;
+  };
+  const personOptions = [
+    { value: "__self_owner__", label: role === "owner" ? "Moi" : "Propriétaire" },
+    ...persons.filter(p=>p.role==="guardian").map(p=>({value:p.id, label:`🛡️ ${p.name}`})),
+  ];
+  return (
+    <Card style={{ padding: "14px 16px", borderLeft: `4px solid ${layer.color}`, marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 16 }}>{layer.icon}</span>
+            <span style={{ fontWeight: 700, fontSize: 14, color: t.text }}>{ev.title}</span>
+            {ev.layer === "treatment" && !hasDoses && ev.tracked && <Tag color={ev.tracked === "done" ? t.secondary : t.danger} small>{ev.tracked === "done" ? "✓ Donné" : "✗ Non donné"}</Tag>}
+            {ev.layer === "treatment" && hasDoses && allTracked && <Tag color={t.secondary} small>✓ Toutes les prises</Tag>}
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <Tag color={layer.color} small>{layer.label}</Tag>
+            {!hasDoses && ev.time && <Tag color={t.textMid} small>🕐 {ev.time}</Tag>}
+            {!hasDoses && ev.timeOfDay && !ev.time && (() => { const tod = TIMES_OF_DAY.find(x => x.id === ev.timeOfDay); return tod ? <Tag color={t.accent} small>{tod.icon} {tod.label}</Tag> : null; })()}
+            {person && ev.layer !== "treatment" && <Tag color={t.secondary} small>👤 {person.name}</Tag>}
+            {ev.layer === "treatment" && !hasDoses && ev.txPersonId && <Tag color={t.purple} small>💊 {resolveTxPersonName()}</Tag>}
+            {ev.layer === "walk" && ev.walkCount > 1 && <Tag color={t.secondary} small>×{ev.walkCount} balades</Tag>}
+          </div>
+          {hasDoses && (
+            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+              {ev.doses.map((dose, i) => {
+                const tod = TIMES_OF_DAY.find(x => x.id === dose.timeOfDay);
+                return (
+                  <>
+                  <div key={dose.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: dose.tracked ? t.secondaryLight : t.purpleLight, borderRadius: 8, padding: "6px 10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 13 }}>{dose.mode === "tod" && tod ? tod.icon : "🕐"}</span>
+                      <span style={{ fontSize: 13, color: t.text, fontWeight: 600 }}>Prise {i + 1} — {dose.mode === "exact" ? dose.exactTime : (tod?.label || "")}</span>
+                      <Tag color={t.purple} small>💊 {resolveDosePersonName(dose.personId)}</Tag>
+                      {dose.tracked && <Tag color={dose.tracked === "done" ? t.secondary : t.danger} small>{dose.tracked === "done" ? "✓" : "✗"}</Tag>}
+                    </div>
+                    <div style={{ display:"flex", gap:4 }}>
+                      {role === "owner" && !dose.tracked && <button onClick={() => setReassignDoseId(reassignDoseId === dose.id ? null : dose.id)} style={{ background: t.purple+"22", border:"none", borderRadius:6, padding:"3px 8px", cursor:"pointer", fontSize:11, color:t.purple, fontWeight:600 }}>✏️</button>}
+                      {!dose.tracked && <button onClick={() => { setTrackDoseId(dose.id); setShowTrack(false); setReassignDoseId(null); }} style={{ background: t.purple + "22", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontSize: 12, color: t.purple, fontWeight: 600 }}>Suivi</button>}
+                    </div>
+                  </div>
+                  {reassignDoseId === dose.id && role === "owner" && (
+                    <div style={{ padding: "8px 10px", background: t.bg, borderRadius: 8, marginTop: 4 }}>
+                      <select value={dose.personId || "__self_owner__"} onChange={e => { onReassignDose(ev.id, dose.id, e.target.value); setReassignDoseId(null); }} style={{ ...iStyle, fontSize: 12, padding: "6px 10px" }}>
+                        {personOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  </>
+                );
+              })}
+            </div>
+          )}
+          {ev.notes && <div style={{ fontSize: 12, color: t.textMid, marginTop: 6 }}>{ev.notes}</div>}
+          {!hasDoses && ev.trackObs && <div style={{ fontSize: 12, color: ev.tracked === "done" ? t.secondary : t.danger, marginTop: 4 }}>📝 {ev.trackObs}</div>}
+        </div>
+        <div style={{ display: "flex", gap: 4, marginLeft: 8, flexShrink: 0 }}>
+          {ev.layer === "treatment" && !hasDoses && !ev.tracked && <button onClick={() => { setShowTrack(s => !s); setTrackDoseId(null); }} style={{ background: t.purpleLight, border: "none", borderRadius: 8, padding: "4px 8px", cursor: "pointer", fontSize: 14 }}>✓</button>}
+          {ev.layer === "treatment" && !hasDoses && role === "owner" && (
+            <button onClick={() => setReassignDoseId(reassignDoseId === "single" ? null : "single")} style={{ background: t.purple+"22", border:"none", borderRadius:8, padding:"4px 8px", cursor:"pointer", fontSize:13 }}>✏️</button>
+          )}
+          {role === "owner" && <button onClick={() => onDelete(ev.id)} style={{ background: "none", border: "none", cursor: "pointer", color: t.textLight, fontSize: 16, padding: 4 }}>🗑</button>}
+        </div>
+      </div>
+      {reassignDoseId === "single" && role === "owner" && (
+        <div style={{ marginTop: 10, padding: 10, background: t.bg, borderRadius: t.radiusSm }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: t.textMid, display:"block", marginBottom:6 }}>Donné par</label>
+          <select value={ev.txPersonId || "__self_owner__"} onChange={e => { onReassignTx(ev.id, e.target.value); setReassignDoseId(null); }} style={{ ...iStyle, fontSize: 12, padding: "6px 10px" }}>
+            {personOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      )}
+      {showTrack && !hasDoses && (
+        <div style={{ marginTop: 12, padding: 12, background: t.bg, borderRadius: t.radiusSm }}>
+          <Txtarea value={obs} onChange={setObs} placeholder="Observation (optionnel)..." style={{ marginBottom: 10 }} />
+          <div style={{ display: "flex", gap: 8 }}><Btn onClick={() => handleTrackSingle("done")} variant="success" small style={{ flex: 1 }}>✓ Donné</Btn><Btn onClick={() => handleTrackSingle("notdone")} variant="danger" small style={{ flex: 1 }}>✗ Non donné</Btn></div>
+        </div>
+      )}
+      {trackDoseId && (
+        <div style={{ marginTop: 12, padding: 12, background: t.bg, borderRadius: t.radiusSm }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: t.purple, marginBottom: 8 }}>Prise {ev.doses.findIndex(d => d.id === trackDoseId) + 1}</div>
+          <Txtarea value={obs} onChange={setObs} placeholder="Observation (optionnel)..." style={{ marginBottom: 10 }} />
+          <div style={{ display: "flex", gap: 8 }}><Btn onClick={() => handleTrackDose(trackDoseId, "done")} variant="success" small style={{ flex: 1 }}>✓ Donnée</Btn><Btn onClick={() => handleTrackDose(trackDoseId, "notdone")} variant="danger" small style={{ flex: 1 }}>✗ Non donnée</Btn></div>
+          <button onClick={() => setTrackDoseId(null)} style={{ marginTop: 8, background: "none", border: "none", cursor: "pointer", color: t.textMid, fontSize: 12, width: "100%" }}>Annuler</button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function MonthGrid({ year, month, events, activeLayer, selected, setSelected }) {
+  const days = daysInMonth(year, month), first = firstDayOfMonth(year, month);
+  const evOn = (d) => { const ds = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`; return events.filter(e => e.date === ds && (activeLayer ? e.layer === activeLayer : true)); };
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3, textAlign: "center" }}>
+      {["Lu","Ma","Me","Je","Ve","Sa","Di"].map(d => <div key={d} style={{ fontSize: 10, fontWeight: 700, color: t.textLight, padding: "4px 0" }}>{d}</div>)}
+      {Array.from({ length: first }).map((_, i) => <div key={"e"+i} />)}
+      {Array.from({ length: days }).map((_, i) => {
+        const d = i+1, ds = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+        const isToday = ds === todayStr(), isSel = ds === selected;
+        const ev = evOn(d);
+        const hasUnavail = events.some(e => e.date === ds && e.layer === "unavail");
+        const hasAtHome = events.some(e => e.date === ds && e.layer === "athome");
+        const hasBoth = hasUnavail && hasAtHome;
+        const bg = isSel ? t.primary : isToday ? t.primaryLight : hasBoth ? t.amberLight : hasUnavail ? t.dangerLight : hasAtHome ? t.greenLight : "transparent";
+        const borderColor = hasBoth ? t.amber : hasUnavail ? t.danger : hasAtHome ? t.green : "transparent";
+        return (
+          <div key={d} onClick={() => setSelected(ds)} style={{ borderRadius: 9, padding: "5px 2px 4px", cursor: "pointer", minHeight: 38, background: bg, color: isSel ? "#fff" : isToday ? t.primary : t.text, fontWeight: isToday||isSel ? 700 : 400, fontSize: 13, border: !isSel ? `1px solid ${borderColor}` : "1px solid transparent", transition: "all 0.12s" }}>
+            {d}
+            {ev.length > 0 && <div style={{ display: "flex", justifyContent: "center", gap: 2, marginTop: 2 }}>{[...new Set(ev.filter(e=>e.layer!=="unavail").map(e=>e.layer))].slice(0,3).map(lid => <div key={lid} style={{ width: 5, height: 5, borderRadius: "50%", background: isSel ? "#fff" : layerFor(lid).color }} />)}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function WeekGrid({ weekDays, events, activeLayer, selected, setSelected }) {
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "44px repeat(7,1fr)", minWidth: 340 }}>
+        <div />
+        {weekDays.map(ds => {
+          const d = new Date(ds+"T12:00:00"), isToday = ds===todayStr(), isSel = ds===selected;
+          return <div key={ds} onClick={() => setSelected(ds)} style={{ textAlign: "center", padding: "6px 2px", cursor: "pointer", borderRadius: 8, background: isSel ? t.primary : isToday ? t.primaryLight : "transparent", color: isSel ? "#fff" : isToday ? t.primary : t.text, fontWeight: isSel||isToday ? 700 : 400, fontSize: 11 }}><div style={{ opacity: 0.7 }}>{d.toLocaleDateString("fr-FR",{weekday:"short"})}</div><div style={{ fontSize: 14 }}>{d.getDate()}</div></div>;
+        })}
+        {TIMES_OF_DAY.map(tod => (<>
+          <div key={tod.id+"l"} style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 6, fontSize: 14, color: t.textLight }}>{tod.icon}</div>
+          {weekDays.map(ds => {
+            const dayEvs = events.filter(e => e.date===ds && (activeLayer ? e.layer===activeLayer : e.layer!=="unavail") && ((e.timeOfDay===tod.id)||(e.time&&parseInt(e.time)>=tod.hour&&parseInt(e.time)<(TIMES_OF_DAY[TIMES_OF_DAY.findIndex(x=>x.id===tod.id)+1]?.hour||24))||(e.doses&&e.doses.some(d=>d.timeOfDay===tod.id))));
+            const isUnavail = events.some(e => e.date===ds && e.layer==="unavail");
+            const isAtHome = events.some(e => e.date===ds && e.layer==="athome");
+            const cellBg = isUnavail && isAtHome ? t.amberLight+"66" : isUnavail ? t.dangerLight+"66" : isAtHome ? t.greenLight+"66" : "transparent";
+            return <div key={ds+tod.id} onClick={() => setSelected(ds)} style={{ minHeight: 48, borderTop: `1px solid ${t.border}`, borderLeft: `1px solid ${t.border}`, padding: 3, cursor: "pointer", background: cellBg }}>{dayEvs.map(ev => { const l=layerFor(ev.layer); return <div key={ev.id} style={{ background: l.color+"22", border: `1px solid ${l.color}44`, borderRadius: 5, padding: "1px 4px", fontSize: 10, fontWeight: 600, color: l.color, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.icon} {ev.title}</div>; })}</div>;
+          })}
+        </>))}
+      </div>
+    </div>
+  );
+}
+
+function AddEventModal({ defaultDate, persons, onSave, onClose, role }) {
+  const isGuardian = role === "guardian";
+  const [layer, setLayer] = useState(isGuardian ? "unavail" : "walk");
+  const [date, setDate] = useState(defaultDate || todayStr());
+  const [timeMode, setTimeMode] = useState("tod");
+  const [timeOfDay, setTimeOfDay] = useState("morning");
+  const [exactTime, setExactTime] = useState("");
+  const [walkCount, setWalkCount] = useState(1);
+  const [notes, setNotes] = useState("");
+  const [recurring, setRecurring] = useState(false);
+  const [endDate, setEndDate] = useState("");
+  const [allDay, setAllDay] = useState(true);
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("18:00");
+  const [notif, setNotif] = useState(false);
+  const [multiDose, setMultiDose] = useState(false);
+  const [doses, setDoses] = useState([{ id: uid(), mode: "tod", timeOfDay: "morning", exactTime: "", personId: "__self_owner__" }, { id: uid(), mode: "tod", timeOfDay: "evening", exactTime: "", personId: "__self_owner__" }]);
+  const [txPersonId, setTxPersonId] = useState("__self_owner__");
+  const [manualTitle, setManualTitle] = useState("");
+  const [titleEdited, setTitleEdited] = useState(false);
+  const isUnavail = layer === "unavail", isAtHome = layer === "athome", isTx = layer === "treatment", isWalk = layer === "walk";
+  const isStatusLayer = isUnavail || isAtHome;
+  const layerOpts = isGuardian ? [{ id: "unavail", label: "Indispo", color: t.danger, icon: "🚫" }, { id: "walk", label: "Balade", color: t.secondary, icon: "🐾" }] : [...LAYERS, { id: "athome", label: "À la maison", color: t.green, icon: "🏠" }];
+
+  const autoWalkTitle = () => {
+    const todLabel = TIMES_OF_DAY.find(x => x.id === timeOfDay);
+    const prepositions = { morning: "du", noon: "du", afternoon: "de l'", evening: "du" };
+    if (timeMode === "tod" && todLabel) {
+      const prep = prepositions[timeOfDay] || "du";
+      const countLabel = walkCount > 1 ? ` (×${walkCount})` : "";
+      return `Balade ${prep} ${todLabel.label.toLowerCase()}${countLabel}`;
+    }
+    if (timeMode === "exact" && exactTime) return `Balade de ${exactTime}`;
+    return "Balade";
+  };
+  const effectiveTitle = isWalk ? (titleEdited ? manualTitle : autoWalkTitle()) : manualTitle;
+  const walkPersonOptions = [
+    { value: "__self__", label: "Moi" },
+    ...persons.filter(p => p.role === "guardian").map(p => ({ value: p.id, label: `🛡️ ${p.name}` })),
+    ...persons.filter(p => p.role === "temp").map(p => ({ value: p.id, label: `👤 ${p.name}` })),
+  ];
+  const [personId, setPersonId] = useState("__self__");
+
+  const handleSave = () => {
+    if (isStatusLayer) {
+      const layerId = isUnavail ? "unavail" : "athome";
+      const titleBase = isUnavail ? "Indisponible" : "À la maison";
+      onSave({ id: uid(), layer: layerId, title: allDay ? `${titleBase} (journée)` : `${titleBase} ${startTime}–${endTime}`, date, allDay, startTime: allDay?"":startTime, endTime: allDay?"":endTime, notes });
+    } else {
+      const finalTitle = isWalk ? effectiveTitle : manualTitle.trim();
+      if (!finalTitle) return;
+      const resolvedPersonId = personId === "__self__" ? `__self_${role}__` : personId;
+      const base = { id: uid(), layer, title: finalTitle, date, time: !isTx && timeMode==="exact" ? exactTime : "", timeOfDay: !isTx && timeMode==="tod" ? timeOfDay : "", walkCount: isWalk && timeMode==="tod" ? walkCount : 1, doses: isTx && multiDose ? doses : null, txPersonId: isTx && !multiDose ? txPersonId : null, personId: resolvedPersonId, notes, notif, status: "planned" };
+      if (recurring && endDate > date) {
+        let d = new Date(date+"T12:00:00"), end = new Date(endDate+"T12:00:00");
+        while (d<=end) { onSave({...base, id:uid(), date:d.toISOString().slice(0,10)}); d.setDate(d.getDate()+1); }
+      } else onSave(base);
+    }
+    onClose();
+  };
+
+  return (
+    <Modal title="Ajouter" onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <Field label="Type"><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{layerOpts.map(l => <button key={l.id} onClick={() => { setLayer(l.id); setTitleEdited(false); }} style={{ padding: "6px 14px", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `2px solid ${l.color}`, background: layer===l.id?l.color:"transparent", color: layer===l.id?"#fff":l.color, fontFamily: "inherit" }}>{l.icon} {l.label}</button>)}</div></Field>
+        {isStatusLayer ? (<>
+          <Input label="Date" value={date} onChange={setDate} type="date" />
+          <label style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,fontWeight:600,color:t.text }}><input type="checkbox" checked={allDay} onChange={e=>setAllDay(e.target.checked)} />Journée entière</label>
+          {!allDay && <div style={{ display:"flex",gap:12 }}><Input label="De" value={startTime} onChange={setStartTime} type="time" style={{flex:1}} /><Input label="À" value={endTime} onChange={setEndTime} type="time" style={{flex:1}} /></div>}
+          <Input label="Notes" value={notes} onChange={setNotes} placeholder="Raison (optionnel)" />
+        </>) : isWalk ? (<>
+          <Field label="Horaire">
+            <div style={{ display:"flex",gap:8,marginBottom:10 }}>{[{id:"tod",label:"Moment"},{id:"exact",label:"Heure précise"}].map(m=><button key={m.id} onClick={()=>{setTimeMode(m.id);setTitleEdited(false);}} style={{ flex:1,padding:"8px",borderRadius:t.radiusSm,fontSize:12,fontWeight:600,cursor:"pointer",border:`1.5px solid ${t.border}`,background:timeMode===m.id?t.primaryLight:"transparent",color:timeMode===m.id?t.primary:t.textMid,fontFamily:"inherit" }}>{m.label}</button>)}</div>
+            {timeMode==="tod" ? <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>{TIMES_OF_DAY.map(tod=><button key={tod.id} onClick={()=>{setTimeOfDay(tod.id);setTitleEdited(false);}} style={{ padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`1.5px solid ${t.secondary}`,background:timeOfDay===tod.id?t.secondary:"transparent",color:timeOfDay===tod.id?"#fff":t.text,fontFamily:"inherit" }}>{tod.icon} {tod.label}</button>)}</div> : <Input value={exactTime} onChange={v=>{setExactTime(v);setTitleEdited(false);}} type="time" />}
+          </Field>
+          {timeMode==="tod" && (
+            <Field label="Nombre de balades">
+              <div style={{ display:"flex",gap:8 }}>{[1,2,3].map(n=><button key={n} onClick={()=>{setWalkCount(n);setTitleEdited(false);}} style={{ flex:1,padding:"8px",borderRadius:t.radiusSm,fontSize:14,fontWeight:700,cursor:"pointer",border:`1.5px solid ${t.secondary}`,background:walkCount===n?t.secondary:"transparent",color:walkCount===n?"#fff":t.secondary,fontFamily:"inherit" }}>{n}×</button>)}</div>
+            </Field>
+          )}
+          <Field label="Titre (auto-rempli, modifiable)"><input value={effectiveTitle} onChange={e=>{setManualTitle(e.target.value);setTitleEdited(true);}} style={iStyle} /></Field>
+          <Input label="Date" value={date} onChange={setDate} type="date" />
+          <Sel label="Qui promène Pixie ?" value={personId} onChange={setPersonId} options={walkPersonOptions} />
+          <Input label="Notes (optionnel)" value={notes} onChange={setNotes} placeholder="Observations..." />
+        </>) : (<>
+          <Input label="Titre" value={manualTitle} onChange={setManualTitle} placeholder={isTx?"Nom du médicament / soin":"Description"} />
+          <Input label="Date" value={date} onChange={setDate} type="date" />
+          {isTx ? (<>
+            <label style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,fontWeight:600,color:t.text }}><input type="checkbox" checked={multiDose} onChange={e=>setMultiDose(e.target.checked)} />Plusieurs prises dans la journée</label>
+            {multiDose ? <DosePicker doses={doses} setDoses={setDoses} persons={persons} /> : (<>
+              <Field label="Horaire">
+                <div style={{ display:"flex",gap:8,marginBottom:10 }}>{[{id:"tod",label:"Moment"},{id:"exact",label:"Heure précise"}].map(m=><button key={m.id} onClick={()=>setTimeMode(m.id)} style={{ flex:1,padding:"8px",borderRadius:t.radiusSm,fontSize:12,fontWeight:600,cursor:"pointer",border:`1.5px solid ${t.border}`,background:timeMode===m.id?t.primaryLight:"transparent",color:timeMode===m.id?t.primary:t.textMid,fontFamily:"inherit" }}>{m.label}</button>)}</div>
+                {timeMode==="tod" ? <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>{TIMES_OF_DAY.map(tod=><button key={tod.id} onClick={()=>setTimeOfDay(tod.id)} style={{ padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`1.5px solid ${t.accent}`,background:timeOfDay===tod.id?t.accent:"transparent",color:timeOfDay===tod.id?"#fff":t.text,fontFamily:"inherit" }}>{tod.icon} {tod.label}</button>)}</div> : <Input value={exactTime} onChange={setExactTime} type="time" />}
+              </Field>
+              <Sel label="Donné par" value={txPersonId} onChange={setTxPersonId} options={[{ value:"__self_owner__", label:"Moi" }, ...persons.filter(p=>p.role==="guardian").map(p=>({value:p.id,label:`🛡️ ${p.name}`})), ...persons.filter(p=>p.role==="temp").map(p=>({value:p.id,label:`👤 ${p.name}`}))]} />
+            </>)}
+            <label style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,fontWeight:600,color:t.text }}><input type="checkbox" checked={recurring} onChange={e=>setRecurring(e.target.checked)} />Traitement sur plusieurs jours</label>
+            {recurring && <Input label="Jusqu'au" value={endDate} onChange={setEndDate} type="date" />}
+            <label style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,fontWeight:600,color:t.text }}><input type="checkbox" checked={notif} onChange={e=>setNotif(e.target.checked)} />🔔 Me rappeler pour ce traitement</label>
+          </>) : (
+            <Field label="Horaire">
+              <div style={{ display:"flex",gap:8,marginBottom:10 }}>{[{id:"tod",label:"Moment"},{id:"exact",label:"Heure précise"}].map(m=><button key={m.id} onClick={()=>setTimeMode(m.id)} style={{ flex:1,padding:"8px",borderRadius:t.radiusSm,fontSize:12,fontWeight:600,cursor:"pointer",border:`1.5px solid ${t.border}`,background:timeMode===m.id?t.primaryLight:"transparent",color:timeMode===m.id?t.primary:t.textMid,fontFamily:"inherit" }}>{m.label}</button>)}</div>
+              {timeMode==="tod" ? <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>{TIMES_OF_DAY.map(tod=><button key={tod.id} onClick={()=>setTimeOfDay(tod.id)} style={{ padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`1.5px solid ${t.accent}`,background:timeOfDay===tod.id?t.accent:"transparent",color:timeOfDay===tod.id?"#fff":t.text,fontFamily:"inherit" }}>{tod.icon} {tod.label}</button>)}</div> : <Input value={exactTime} onChange={setExactTime} type="time" />}
+            </Field>
+          )}
+          <Input label="Notes (optionnel)" value={notes} onChange={setNotes} placeholder="Observations, instructions..." />
+        </>)}
+        <div style={{ display:"flex",gap:10,marginTop:4 }}>
+          <Btn onClick={onClose} variant="ghost" style={{flex:1}}>Annuler</Btn>
+          <Btn onClick={handleSave} style={{flex:1}} disabled={!isStatusLayer && !isWalk && !manualTitle.trim()}>Enregistrer</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function AddObsModal({ onSave, onClose, role, persons }) {
+  const [text, setText] = useState(""), [expDays, setExpDays] = useState("7");
+  const handleSave = () => {
+    if (!text.trim()) return;
+    const exp = new Date(); exp.setDate(exp.getDate()+parseInt(expDays));
+    const guardianName = persons?.find(p => p.role === "guardian")?.name || null;
+    onSave({ id:uid(), text:text.trim(), date:todayStr(), expires:exp.toISOString().slice(0,10), authorRole: role, guardianName });
+    onClose();
+  };
+  return (
+    <Modal title="Observation libre" onClose={onClose}>
+      <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
+        <Txtarea label="Observation" value={text} onChange={setText} placeholder="Ex: Pixie a boité ce matin, à surveiller..." />
+        <Sel label="Visible pendant" value={expDays} onChange={setExpDays} options={[{value:"3",label:"3 jours"},{value:"7",label:"7 jours"},{value:"14",label:"14 jours"},{value:"30",label:"1 mois"}]} />
+        <div style={{ display:"flex",gap:10 }}><Btn onClick={onClose} variant="ghost" style={{flex:1}}>Annuler</Btn><Btn onClick={handleSave} style={{flex:1}} disabled={!text.trim()}>Enregistrer</Btn></div>
+      </div>
+    </Modal>
+  );
+}
+
+function CalendarView({ events, setEvents, persons, role, observations, setObservations }) {
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth());
+  const [selected, setSelected] = useState(todayStr());
+  const [viewMode, setViewMode] = useState("month");
+  const [activeLayer, setActiveLayer] = useState(null);
+  const [addingEvent, setAddingEvent] = useState(false);
+  const [addingObs, setAddingObs] = useState(false);
+  const weekDays = getWeekDays(selected);
+  const activeObs = observations.filter(o => o.expires >= todayStr());
+  const selEvents = events.filter(e => e.date===selected && e.layer!=="unavail" && e.layer!=="athome" && (activeLayer ? e.layer===activeLayer : true));
+  const selUnavails = events.filter(e => e.date===selected && e.layer==="unavail");
+  const selAtHome = events.filter(e => e.date===selected && e.layer==="athome");
+  const hasBothStatus = selUnavails.length > 0 && selAtHome.length > 0;
+  const prevPeriod = () => { if (viewMode==="month") { if (month===0){setYear(y=>y-1);setMonth(11);}else setMonth(m=>m-1); } else { const d=new Date(selected+"T12:00:00"); d.setDate(d.getDate()-7); setSelected(d.toISOString().slice(0,10)); } };
+  const nextPeriod = () => { if (viewMode==="month") { if (month===11){setYear(y=>y+1);setMonth(0);}else setMonth(m=>m+1); } else { const d=new Date(selected+"T12:00:00"); d.setDate(d.getDate()+7); setSelected(d.toISOString().slice(0,10)); } };
+  const periodLabel = viewMode==="month" ? new Date(year,month).toLocaleDateString("fr-FR",{month:"long",year:"numeric"}) : `${fmtShortNum(weekDays[0])} – ${fmtShortNum(weekDays[6])}`;
+  const deleteEv = (id) => setEvents(es => es.filter(e => e.id!==id));
+  const trackTx = (id, status, obs, doseId) => setEvents(es => es.map(e => { if(e.id!==id) return e; if(doseId&&e.doses) return {...e, doses:e.doses.map(d=>d.id===doseId?{...d,tracked:status,trackObs:obs}:d)}; return {...e,tracked:status,trackObs:obs}; }));
+  const reassignDose = (evId, doseId, personId) => setEvents(es => es.map(e => e.id!==evId ? e : {...e, doses:e.doses.map(d=>d.id===doseId?{...d,personId}:d)}));
+  const reassignTx = (evId, personId) => setEvents(es => es.map(e => e.id!==evId ? e : {...e, txPersonId: personId}));
+  return (
+    <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
+      {activeObs.map(o => {
+        const authorLabel = o.authorRole === role ? "Moi" : o.authorRole === "guardian" ? (o.guardianName || "le gardien") : "la propriétaire";
+        return (
+          <div key={o.id} style={{ background:t.accentLight, border:`1px solid ${t.accent}44`, borderRadius:t.radiusSm, padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+            <div><div style={{ fontSize:11,fontWeight:600,color:"#b08a20",marginBottom:3 }}>📋 Note de {authorLabel} · expire {fmtShortNum(o.expires)}</div><div style={{ fontSize:13,color:t.text }}>{o.text}</div></div>
+            <button onClick={() => setObservations(obs=>obs.filter(x=>x.id!==o.id))} style={{ background:"none",border:"none",cursor:"pointer",color:t.textLight,fontSize:16,paddingLeft:8 }}>×</button>
+          </div>
+        );
+      })}
+      <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
+        <button onClick={() => setActiveLayer(null)} style={{ padding:"5px 13px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`2px solid ${t.border}`,background:!activeLayer?t.text:"transparent",color:!activeLayer?"#fff":t.textMid,fontFamily:"inherit" }}>Tout</button>
+        {LAYERS.map(l => <button key={l.id} onClick={() => setActiveLayer(al=>al===l.id?null:l.id)} style={{ padding:"5px 13px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`2px solid ${l.color}`,background:activeLayer===l.id?l.color:"transparent",color:activeLayer===l.id?"#fff":l.color,fontFamily:"inherit",transition:"all 0.15s" }}>{l.icon} {l.label}</button>)}
+      </div>
+      <Card style={{ padding:16 }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
+          <Btn onClick={prevPeriod} variant="ghost" small>‹</Btn>
+          <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:4 }}>
+            <span style={{ fontWeight:700,fontSize:14,color:t.text,textTransform:"capitalize" }}>{periodLabel}</span>
+            <button onClick={() => setViewMode(v=>v==="month"?"week":"month")} style={{ fontSize:11,fontWeight:600,color:t.primary,background:t.primaryLight,border:"none",borderRadius:10,padding:"2px 10px",cursor:"pointer",fontFamily:"inherit" }}>{viewMode==="month"?"Vue semaine →":"← Vue mois"}</button>
+          </div>
+          <Btn onClick={nextPeriod} variant="ghost" small>›</Btn>
+        </div>
+        {viewMode==="month" ? <MonthGrid year={year} month={month} events={events} activeLayer={activeLayer} selected={selected} setSelected={setSelected} /> : <WeekGrid weekDays={weekDays} events={events} activeLayer={activeLayer} selected={selected} setSelected={setSelected} />}
+      </Card>
+      <div>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}>
+          <span style={{ fontSize:14,fontWeight:700,color:t.text }}>{fmtDate(selected)}</span>
+          <div style={{ display:"flex",gap:8 }}>
+            <Btn onClick={() => setAddingObs(true)} variant="ghost" small>📋 Note</Btn>
+            <Btn onClick={() => setAddingEvent(true)} small>+ Ajouter</Btn>
+          </div>
+        </div>
+        {hasBothStatus && (
+          <div style={{ background: t.amberLight, border: `1px solid ${t.amber}44`, borderRadius: t.radiusSm, padding: "8px 14px", marginBottom: 8, fontSize: 13, fontWeight: 600, color: t.amber }}>
+            ⚠️ Superposition : indisponibilité + présence à la maison ce jour
+          </div>
+        )}
+        {selUnavails.map(u => {
+          const guardianName = persons.find(p => p.role === "guardian")?.name;
+          const prefix = role === "owner" && guardianName ? `${guardianName} ` : "";
+          return (
+            <div key={u.id} style={{ background:t.dangerLight,border:`1px solid ${t.danger}44`,borderRadius:t.radiusSm,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}>
+              <span style={{ fontSize:13,fontWeight:600,color:t.danger }}>🚫 {prefix}{u.allDay ? "indisponible (journée)" : `indisponible ${u.startTime}–${u.endTime}`}{u.notes?` — ${u.notes}`:""}</span>
+              {(role==="owner"||role==="guardian") && <button onClick={() => deleteEv(u.id)} style={{ background:"none",border:"none",cursor:"pointer",color:t.danger,fontSize:14 }}>🗑</button>}
+            </div>
+          );
+        })}
+        {selAtHome.map(a => (
+          <div key={a.id} style={{ background:t.greenLight,border:`1px solid ${t.green}44`,borderRadius:t.radiusSm,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}>
+            <span style={{ fontSize:13,fontWeight:600,color:t.green }}>🏠 {role === "owner" ? "Je suis" : "Propriétaire"} à la maison{a.allDay ? " (journée)" : ` ${a.startTime}–${a.endTime}`}{a.notes?` — ${a.notes}`:""}</span>
+            {role==="owner" && <button onClick={() => deleteEv(a.id)} style={{ background:"none",border:"none",cursor:"pointer",color:t.green,fontSize:14 }}>🗑</button>}
+          </div>
+        ))}
+        {selEvents.length===0&&selUnavails.length===0&&selAtHome.length===0 ? <div style={{ textAlign:"center",padding:"28px 0",color:t.textLight,fontSize:14 }}>Rien de prévu ce jour 🌿</div> : selEvents.map(ev => <EventCard key={ev.id} ev={ev} persons={persons} role={role} onDelete={deleteEv} onTrack={trackTx} onReassignDose={reassignDose} onReassignTx={reassignTx} />)}
+      </div>
+      {addingEvent && <AddEventModal defaultDate={selected} persons={persons} onSave={ev=>setEvents(es=>[...es,ev])} onClose={() => setAddingEvent(false)} role={role} />}
+      {addingObs && <AddObsModal role={role} persons={persons} onSave={o=>setObservations(obs=>[...obs,o])} onClose={() => setAddingObs(false)} />}
+    </div>
+  );
+}
+
+function AvailView({ avails, setAvails, role, persons, onNotify }) {
+  const [date, setDate] = useState(todayStr());
+  const [st, setSt] = useState("09:00"), [et, setEt] = useState("12:00");
+  const [notes, setNotes] = useState("");
+  const [targetPersonId, setTargetPersonId] = useState(persons.find(p=>p.role==="guardian")?.id || "");
+  const [smsCopied, setSmsCopied] = useState(false);
+  const targetPerson = persons.find(p => p.id === targetPersonId);
+  const isTemp = targetPerson?.role === "temp";
+  const allPersons = [...persons.filter(p=>p.role==="guardian"), ...persons.filter(p=>p.role==="temp")];
+  const guardians = persons.filter(p => p.role === "guardian");
+  const upcoming = avails.filter(a => a.date >= todayStr()).sort((a,b)=>a.date.localeCompare(b.date));
+  const past = avails.filter(a => a.date < todayStr()).sort((a,b)=>b.date.localeCompare(a.date));
+  const addGuardianRequest = () => { setAvails(a => [...a, { id:uid(), date, startTime:st, endTime:et, notes, responses:{} }]); setNotes(""); onNotify("guardian","Nouvelle demande de disponibilité 🐾",`${fmtDate(date)} — ${st} à ${et}`); };
+  const buildSmsText = () => { const name = targetPerson ? targetPerson.name : ""; const greeting = name ? `Salut ${name} ! ` : ""; const notesLine = notes ? `\n\nInfos : ${notes}` : ""; return `${greeting}Est-ce que tu serais disponible pour Pixie le ${fmtShort(date)}, de ${st} à ${et} ?${notesLine}`; };
+  const livePreview = isTemp && date && st && et ? buildSmsText() : null;
+  const handleTempRequest = () => { navigator.clipboard.writeText(livePreview || buildSmsText()).then(() => { setSmsCopied(true); setTimeout(() => setSmsCopied(false), 2500); }); };
+  const respond = (id, pid, ans) => { setAvails(a => a.map(s => s.id===id ? {...s, responses:{...s.responses,[pid]:ans}} : s)); onNotify("owner","Réponse reçue 🐾", ans==="yes"?"✓ Disponible":"✗ Indisponible"); };
+  return (
+    <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
+      {role==="owner" && (
+        <Card style={{ padding:20 }}>
+          <div style={{ fontWeight:700,fontSize:15,color:t.text,marginBottom:16 }}>Demander de la disponibilité</div>
+          <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+            {allPersons.length > 0 && <Sel label="Pour qui ?" value={targetPersonId} onChange={setTargetPersonId} options={[...persons.filter(p=>p.role==="guardian").map(p=>({value:p.id, label:`🛡️ ${p.name}`})), ...persons.filter(p=>p.role==="temp").map(p=>({value:p.id, label:`👤 ${p.name}`}))]} />}
+            <Input label="Date" value={date} onChange={setDate} type="date" />
+            <div style={{ display:"flex",gap:12 }}><Input label="De" value={st} onChange={setSt} type="time" style={{flex:1}} /><Input label="À" value={et} onChange={setEt} type="time" style={{flex:1}} /></div>
+            <Input label="Notes" value={notes} onChange={setNotes} placeholder="Ex: balade + repas du soir" />
+            {isTemp ? (
+              <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                {livePreview && <div style={{ background:t.bg,border:`1px solid ${t.border}`,borderRadius:t.radiusSm,padding:12 }}><div style={{ fontSize:11,fontWeight:600,color:t.textMid,marginBottom:6 }}>Aperçu</div><pre style={{ fontSize:12,color:t.textMid,whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.6,margin:0 }}>{livePreview}</pre></div>}
+                <Btn onClick={handleTempRequest} variant={smsCopied?"secondary":"primary"}>{smsCopied ? "✓ Copié !" : "📋 Copier le message SMS"}</Btn>
+              </div>
+            ) : <Btn onClick={addGuardianRequest}>Envoyer la demande 📨</Btn>}
+          </div>
+        </Card>
+      )}
+      {upcoming.length===0&&past.length===0 && <div style={{ textAlign:"center",color:t.textLight,fontSize:14,padding:"32px 0" }}>Aucune demande en cours</div>}
+      {upcoming.map(slot => (
+        <Card key={slot.id} style={{ padding:16 }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12 }}>
+            <div><div style={{ fontWeight:700,color:t.text }}>{fmtDate(slot.date)}</div><div style={{ fontSize:13,color:t.textMid }}>🕐 {slot.startTime} – {slot.endTime}</div>{slot.notes && <div style={{ fontSize:12,color:t.textMid,marginTop:3 }}>{slot.notes}</div>}</div>
+            {role==="owner" && <button onClick={() => setAvails(a=>a.filter(x=>x.id!==slot.id))} style={{ background:"none",border:"none",cursor:"pointer",color:t.danger }}>🗑</button>}
+          </div>
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {guardians.map(p => { const resp = slot.responses[p.id]; return (
+              <div key={p.id} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:t.bg,borderRadius:t.radiusSm }}>
+                <span style={{ fontSize:13,fontWeight:600,color:t.text }}>🛡️ {p.name}</span>
+                {role==="guardian" ? <div style={{ display:"flex",gap:8 }}><Btn onClick={() => respond(slot.id,p.id,"yes")} small variant={resp==="yes"?"success":"ghost"}>✓ Dispo</Btn><Btn onClick={() => respond(slot.id,p.id,"no")} small variant={resp==="no"?"danger":"ghost"}>✗ Indispo</Btn></div>
+                  : <Tag color={resp==="yes"?t.secondary:resp==="no"?t.danger:t.textLight} small>{resp==="yes"?"✓ Disponible":resp==="no"?"✗ Indisponible":"En attente..."}</Tag>}
+              </div>
+            ); })}
+            {guardians.length===0 && <div style={{ fontSize:13,color:t.textLight,textAlign:"center",padding:"8px 0" }}>Aucun gardien principal enregistré</div>}
+          </div>
+        </Card>
+      ))}
+      {past.length>0 && <details><summary style={{ fontSize:13,color:t.textMid,fontWeight:600,padding:"6px 0",cursor:"pointer" }}>Demandes passées ({past.length})</summary><div style={{ marginTop:8,display:"flex",flexDirection:"column",gap:6 }}>{past.slice(0,5).map(s=><Card key={s.id} style={{padding:10,opacity:0.55}}><div style={{fontSize:13,color:t.text}}>{fmtDate(s.date)} — {s.startTime}–{s.endTime}</div></Card>)}</div></details>}
+    </div>
+  );
+}
+
+function PersonsView({ persons, setPersons }) {
+  const [name, setName] = useState(""), [personRole, setPersonRole] = useState("guardian");
+  const add = () => { if(!name.trim()) return; setPersons(ps=>[...ps,{id:uid(),name:name.trim(),role:personRole}]); setName(""); };
+  return (
+    <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
+      <Card style={{ padding:20 }}>
+        <div style={{ fontWeight:700,fontSize:15,color:t.text,marginBottom:16 }}>Ajouter une personne</div>
+        <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+          <Input label="Prénom" value={name} onChange={setName} placeholder="Ex: Thomas" />
+          <Field label="Rôle"><div style={{ display:"flex",gap:8 }}>{Object.entries(PERSON_ROLES).map(([key,val]) => (<button key={key} onClick={() => setPersonRole(key)} style={{ flex:1,padding:"10px 8px",borderRadius:t.radiusSm,fontSize:12,fontWeight:600,cursor:"pointer",border:`2px solid ${personRole===key?t.primary:t.border}`,background:personRole===key?t.primaryLight:"transparent",color:personRole===key?t.primary:t.textMid,fontFamily:"inherit",textAlign:"center" }}><div style={{ fontSize:18,marginBottom:4 }}>{val.icon}</div><div>{val.label}</div><div style={{ fontSize:10,opacity:0.7,marginTop:2,fontWeight:400 }}>{val.desc}</div></button>))}</div></Field>
+          <Btn onClick={add} disabled={!name.trim()}>Ajouter</Btn>
+        </div>
+      </Card>
+      <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
+        {Object.entries(PERSON_ROLES).map(([key,val]) => { const group = persons.filter(p=>p.role===key); if (!group.length) return null; return (<div key={key}><div style={{ fontSize:12,fontWeight:700,color:t.textMid,marginBottom:8,paddingLeft:4 }}>{val.icon} {val.label}</div>{group.map(p => (<Card key={p.id} style={{ padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}><div style={{ fontWeight:700,fontSize:14,color:t.text }}>{p.name}</div><button onClick={() => setPersons(ps=>ps.filter(x=>x.id!==p.id))} style={{ background:"none",border:"none",cursor:"pointer",color:t.danger,fontSize:16 }}>🗑</button></Card>))}</div>); })}
+        {persons.length===0 && <div style={{ textAlign:"center",color:t.textLight,fontSize:14,padding:"24px 0" }}>Aucune personne ajoutée</div>}
+      </div>
+    </div>
+  );
+}
+
+function ShareView({ events, persons, observations }) {
+  const [singleDay, setSingleDay] = useState(true);
+  const [date, setDate] = useState(todayStr());
+  const [from, setFrom] = useState(todayStr()), [to, setTo] = useState(todayStr());
+  const [targetId, setTargetId] = useState(persons[0]?.id || "");
+  const [excluded, setExcluded] = useState(new Set());
+  const [includedObs, setIncludedObs] = useState(new Set());
+  const [includedNotes, setIncludedNotes] = useState(new Set());
+  const [copied, setCopied] = useState(false);
+
+  const effectiveFrom = singleDay ? date : from;
+  const effectiveTo = singleDay ? date : to;
+  const target = persons.find(p=>p.id===targetId);
+  const filtered = events.filter(e=>e.date>=effectiveFrom&&e.date<=effectiveTo&&e.layer!=="unavail"&&e.layer!=="athome").sort((a,b)=>a.date.localeCompare(b.date));
+  const activeObs = observations.filter(o => o.expires >= todayStr() && o.text?.trim() && o.authorRole === "owner");
+
+  const toggleEvent = (id) => setExcluded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleObs = (id) => setIncludedObs(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleNote = (id) => setIncludedNotes(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const resolvePersonName = (personId) => { if (!personId) return null; if (personId === "__self_owner__") return "moi"; if (personId === "__self_guardian__") return persons.find(p=>p.role==="guardian")?.name || "le gardien"; return persons.find(p=>p.id===personId)?.name || null; };
+
+  const formatDoses = (ev) => {
+    if (ev.layer === "walk") { const who = resolvePersonName(ev.personId); const countPart = ev.walkCount > 1 ? `${ev.walkCount}× ` : ""; return who ? ` (${countPart}par ${who})` : ev.walkCount > 1 ? ` (${ev.walkCount}×)` : ""; }
+    if (ev.layer === "treatment") {
+      if (ev.doses && ev.doses.length > 1) {
+        return "\n" + ev.doses.map((d,i) => {
+          const time = d.mode==="exact" ? d.exactTime : (TIMES_OF_DAY.find(x=>x.id===d.timeOfDay)?.label||"");
+          const who = resolvePersonName(d.personId);
+          return `   • Prise ${i+1}${time?` (${time})`:""}${who?` — par ${who}`:""}`;
+        }).join("\n");
+      }
+      const time = ev.time||(ev.timeOfDay?TIMES_OF_DAY.find(x=>x.id===ev.timeOfDay)?.label:"");
+      const who = resolvePersonName(ev.txPersonId);
+      return `${time?` (${time})`:""}${who?` — par ${who}`:""}`;
+    }
+    if (!ev.doses||ev.doses.length<=1) { const time=ev.time||(ev.timeOfDay?TIMES_OF_DAY.find(x=>x.id===ev.timeOfDay)?.label:""); return time?` (${time})`:""; }
+    return "\n"+ev.doses.map((d,i)=>{ const time=d.mode==="exact"?d.exactTime:(TIMES_OF_DAY.find(x=>x.id===d.timeOfDay)?.label||""); return `   • Prise ${i+1} : ${time}`; }).join("\n");
+  };
+
+  const selectedEvents = filtered.filter(e => !excluded.has(e.id));
+  const selectedObs = activeObs.filter(o => includedObs.has(o.id));
+
+  const evLines = selectedEvents.length===0 ? "Aucun événement sur cette période." : selectedEvents.map(ev=>{ const l=layerFor(ev.layer); const noteStr = ev.notes && includedNotes.has(ev.id) ? `\n   → ${ev.notes}` : ""; return `${fmtDate(ev.date)} — ${l.icon} ${ev.title}${formatDoses(ev)}${noteStr}`; }).join("\n");
+  const obsLines = selectedObs.length > 0 ? "\n\n📋 Notes :\n" + selectedObs.map(o => `• ${o.text}`).join("\n") : "";
+  const greeting = target ? `Salut ${target.name} ! Voici les infos pour Pixie` : "Infos pour Pixie";
+  const dateLabel = singleDay ? `le ${fmtShort(date)}` : `du ${fmtShortNum(effectiveFrom)} au ${fmtShortNum(effectiveTo)}`;
+  const fullText = `🐾 ${greeting}\n${dateLabel.charAt(0).toUpperCase()+dateLabel.slice(1)}\n\n${evLines}${obsLines}`;
+
+  const copy = () => { navigator.clipboard.writeText(fullText).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2500);}); };
+
+  return (
+    <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
+      <Card style={{ padding:20 }}>
+        <div style={{ fontWeight:700,fontSize:15,color:t.text,marginBottom:16 }}>Générer un récap</div>
+        <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+          {persons.length>0 && <Sel label="Pour qui ?" value={targetId} onChange={setTargetId} options={[{value:"",label:"— Personne en particulier —"},...persons.map(p=>({value:p.id,label:`${PERSON_ROLES[p.role]?.icon} ${p.name}`}))]} />}
+          <label style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,fontWeight:600,color:t.text }}><input type="checkbox" checked={!singleDay} onChange={e=>setSingleDay(!e.target.checked)} />Sur plusieurs jours</label>
+          {singleDay ? <Input label="Le" value={date} onChange={setDate} type="date" /> : <div style={{ display:"flex",gap:12 }}><Input label="Du" value={from} onChange={setFrom} type="date" style={{flex:1}} /><Input label="Au" value={to} onChange={setTo} type="date" style={{flex:1}} /></div>}
+        </div>
+      </Card>
+
+      {filtered.length > 0 && (
+        <Card style={{ padding:20 }}>
+          <div style={{ fontWeight:700,fontSize:13,color:t.text,marginBottom:12 }}>Sélectionner les événements à inclure</div>
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {filtered.map(ev => {
+              const layer = layerFor(ev.layer);
+              const isChecked = !excluded.has(ev.id);
+              const noteChecked = includedNotes.has(ev.id);
+              return (
+                <div key={ev.id} style={{ display:"flex",flexDirection:"column",gap:4 }}>
+                  <label style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"8px 10px",borderRadius:t.radiusSm,background:isChecked?layer.color+"11":t.bg,border:`1px solid ${isChecked?layer.color+"44":t.border}`,transition:"all 0.12s" }}>
+                    <input type="checkbox" checked={isChecked} onChange={()=>toggleEvent(ev.id)} style={{ width:16,height:16,accentColor:layer.color,flexShrink:0 }} />
+                    <span style={{ fontSize:13,color:isChecked?t.text:t.textLight }}>{layer.icon} {fmtDate(ev.date)} — {ev.title}</span>
+                  </label>
+                  {ev.notes && isChecked && (
+                    <label style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"6px 10px 6px 36px",borderRadius:t.radiusSm,background:noteChecked?t.accentLight:t.bg,border:`1px solid ${noteChecked?t.accent+"44":t.border}`,transition:"all 0.12s" }}>
+                      <input type="checkbox" checked={noteChecked} onChange={()=>toggleNote(ev.id)} style={{ width:14,height:14,accentColor:t.accent,flexShrink:0 }} />
+                      <span style={{ fontSize:12,color:noteChecked?t.text:t.textLight,fontStyle:"italic" }}>📝 Inclure la note : "{ev.notes}"</span>
+                    </label>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      <Card style={{ padding:20 }}>
+        <div style={{ fontWeight:700,fontSize:13,color:t.text,marginBottom:12 }}>Notes à inclure <span style={{ fontSize:11,fontWeight:400,color:t.textMid }}>(décochées par défaut)</span></div>
+        {activeObs.length === 0
+          ? <div style={{ fontSize:13,color:t.textLight,fontStyle:"italic" }}>Aucune note active pour le moment</div>
+          : <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {activeObs.map(o => {
+              const isChecked = includedObs.has(o.id);
+              return (
+                <label key={o.id} style={{ display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer",padding:"8px 10px",borderRadius:t.radiusSm,background:isChecked?t.accentLight:t.bg,border:`1px solid ${isChecked?t.accent+"66":t.border}`,transition:"all 0.12s" }}>
+                  <input type="checkbox" checked={isChecked} onChange={()=>toggleObs(o.id)} style={{ width:16,height:16,accentColor:t.accent,flexShrink:0,marginTop:2 }} />
+                  <span style={{ fontSize:13,color:isChecked?t.text:t.textLight,lineHeight:1.5 }}>{o.text}</span>
+                </label>
+              );
+            })}
+          </div>
+        }
+      </Card>
+
+      <Card style={{ padding:20 }}>
+        <div style={{ fontWeight:700,fontSize:13,color:t.text,marginBottom:10 }}>Aperçu</div>
+        <pre style={{ fontSize:12,color:t.textMid,whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.7,background:t.bg,padding:14,borderRadius:t.radiusSm,margin:0 }}>{fullText}</pre>
+        <Btn onClick={copy} style={{ marginTop:14,width:"100%" }} variant={copied?"secondary":"primary"}>{copied?"✓ Copié !":"📋 Copier pour envoyer par SMS"}</Btn>
+      </Card>
+    </div>
+  );
+}
+
+function SettingsView({ notifEnabled, setNotifEnabled, role, events, persons, avails, observations, onImport }) {
+  const [perm, setPerm] = useState(typeof Notification!=="undefined"?Notification.permission:"unsupported");
+  const [importConfirm, setImportConfirm] = useState(false);
+  const [importError, setImportError] = useState("");
+  const requestPerm = async () => { if(!("Notification" in window)) return; const p=await Notification.requestPermission(); setPerm(p); if(p==="granted") setNotifEnabled(true); };
+
+  const handleExport = () => {
+    const data = { version: 1, exportedAt: new Date().toISOString(), events, persons, avails, observations };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `pixie-backup-${todayStr()}.json`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data.events || !data.persons) { setImportError("Fichier invalide ou incompatible."); return; }
+        setImportConfirm(data);
+        setImportError("");
+      } catch { setImportError("Impossible de lire ce fichier."); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  return (
+    <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
+      <Card style={{ padding:20 }}>
+        <div style={{ fontWeight:700,fontSize:15,color:t.text,marginBottom:14 }}>🔔 Notifications</div>
+        <div style={{ fontSize:13,color:t.textMid,lineHeight:1.6,marginBottom:14 }}>{role==="owner"?"Notification quand le gardien répond à une demande.":"Notification quand une nouvelle demande de disponibilité est créée."}</div>
+        {perm==="unsupported" && <div style={{ fontSize:12,color:t.danger }}>Non supporté sur ce navigateur.</div>}
+        {perm==="denied" && <div style={{ fontSize:12,color:t.danger }}>Bloquées — à activer dans les réglages du navigateur.</div>}
+        {perm!=="unsupported"&&perm!=="denied" && (<>{perm!=="granted" && <Btn onClick={requestPerm}>Activer les notifications</Btn>}{perm==="granted" && <label style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer" }}><input type="checkbox" checked={notifEnabled} onChange={e=>setNotifEnabled(e.target.checked)} style={{width:16,height:16}} /><span style={{ fontSize:13,fontWeight:600,color:t.text }}>Notifications {notifEnabled?"activées ✓":"désactivées"}</span></label>}</>)}
+      </Card>
+      <Card style={{ padding:20 }}>
+        <div style={{ fontWeight:700,fontSize:14,color:t.text,marginBottom:10 }}>📱 Installer sur l'écran d'accueil</div>
+        <div style={{ fontSize:13,color:t.textMid,lineHeight:1.8 }}><b>iPhone (Safari) :</b> icône Partager ↑ → "Sur l'écran d'accueil"<br /><b>Android (Chrome) :</b> menu ⋮ → "Ajouter à l'écran d'accueil"</div>
+      </Card>
+      {role === "owner" && (
+        <Card style={{ padding:20 }}>
+          <div style={{ fontWeight:700,fontSize:14,color:t.text,marginBottom:6 }}>💾 Sauvegarde des données</div>
+          <div style={{ fontSize:12,color:t.textMid,marginBottom:14,lineHeight:1.6 }}>Exporte toutes les données dans un fichier JSON. Conserve-le précieusement — il permet de tout restaurer en cas de besoin.</div>
+          <Btn onClick={handleExport} variant="secondary" style={{ width:"100%", marginBottom:12 }}>📥 Exporter mes données</Btn>
+          <div style={{ fontSize:12,color:t.textMid,marginBottom:8,fontWeight:600 }}>Restaurer depuis un fichier</div>
+          <label style={{ display:"block", cursor:"pointer" }}>
+            <div style={{ background:t.bg, border:`1.5px dashed ${t.border}`, borderRadius:t.radiusSm, padding:"12px 16px", textAlign:"center", fontSize:13, color:t.textMid }}>📂 Choisir un fichier .json</div>
+            <input type="file" accept=".json" onChange={handleImport} style={{ display:"none" }} />
+          </label>
+          {importError && <div style={{ fontSize:12,color:t.danger,marginTop:8 }}>{importError}</div>}
+          {importConfirm && (
+            <div style={{ marginTop:12, padding:14, background:t.dangerLight, borderRadius:t.radiusSm, border:`1px solid ${t.danger}44` }}>
+              <div style={{ fontSize:13,fontWeight:600,color:t.danger,marginBottom:8 }}>⚠️ Cette action remplacera toutes les données actuelles.</div>
+              <div style={{ fontSize:12,color:t.textMid,marginBottom:12 }}>Fichier du {new Date(importConfirm.exportedAt).toLocaleDateString("fr-FR")} — {importConfirm.events?.length || 0} événements, {importConfirm.persons?.length || 0} personnes</div>
+              <div style={{ display:"flex",gap:10 }}>
+                <Btn onClick={() => setImportConfirm(false)} variant="ghost" small style={{flex:1}}>Annuler</Btn>
+                <Btn onClick={() => { onImport(importConfirm); setImportConfirm(false); }} variant="danger" small style={{flex:1}}>Confirmer l'import</Btn>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+export default function PixieApp() {
+  const { load, save } = useStorage();
+  const [role, setRole] = useState(null);
+  const [tab, setTab] = useState("calendar");
+  const [events, setEvents] = useState([]);
+  const [persons, setPersons] = useState([]);
+  const [avails, setAvails] = useState([]);
+  const [observations, setObservations] = useState([]);
+  const [notifEnabled, setNotifEnabled] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    Promise.all([load("pixie-ev4"),load("pixie-ps4"),load("pixie-av4"),load("pixie-ob4"),load("pixie-nf4")]).then(([ev,ps,av,ob,nf])=>{
+      if(ev) setEvents(ev); if(ps) setPersons(ps); if(av) setAvails(av);
+      if(ob) setObservations(ob.filter(o=>o.expires>=todayStr())); if(nf!==null) setNotifEnabled(nf);
+      setLoaded(true);
+    });
+  },[]);
+
+  useEffect(()=>{ if(loaded) save("pixie-ev4",events); },[events,loaded]);
+  useEffect(()=>{ if(loaded) save("pixie-ps4",persons); },[persons,loaded]);
+  useEffect(()=>{ if(loaded) save("pixie-av4",avails); },[avails,loaded]);
+  useEffect(()=>{ if(loaded) save("pixie-ob4",observations); },[observations,loaded]);
+  useEffect(()=>{ if(loaded) save("pixie-nf4",notifEnabled); },[notifEnabled,loaded]);
+
+  const handleImport = (data) => {
+    if (data.events) setEvents(data.events);
+    if (data.persons) setPersons(data.persons);
+    if (data.avails) setAvails(data.avails);
+    if (data.observations) setObservations(data.observations.filter(o=>o.expires>=todayStr()));
+  };
+  const pendingBadge = role==="guardian" ? avails.filter(a=>a.date>=todayStr()&&!Object.keys(a.responses).length).length : 0;
+  const handleNotify = (targetRole,title,body) => { if(role!==targetRole&&notifEnabled) sendNotif(title,body); };
+  const TABS_O = [{id:"calendar",label:"Calendrier",icon:"📅"},{id:"avail",label:"Dispos",icon:"🤝"},{id:"persons",label:"Personnes",icon:"👥"},{id:"share",label:"Partager",icon:"📤"},{id:"settings",label:"Réglages",icon:"⚙️"}];
+  const TABS_G = [{id:"calendar",label:"Calendrier",icon:"📅"},{id:"avail",label:"Dispos",icon:"🤝"},{id:"settings",label:"Réglages",icon:"⚙️"}];
+  const tabs = role==="owner" ? TABS_O : TABS_G;
+
+  if (!role) return (
+    <div style={{ minHeight:"100vh",background:t.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Georgia', serif" }}>
+      <div style={{ width:"100%",maxWidth:340,textAlign:"center" }}>
+        <div style={{ fontSize:72,marginBottom:4 }}>🐾</div>
+        <div style={{ fontSize:36,fontWeight:900,color:t.text,marginBottom:4,letterSpacing:-1 }}>Pixie</div>
+        <div style={{ fontSize:14,color:t.textMid,marginBottom:40 }}>Qui êtes-vous ?</div>
+        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          {[{ r:"owner", label:"Propriétaire", sub:"Accès complet", icon:"👑", c:t.primary }, { r:"guardian", label:"Gardien principal", sub:"Voir & répondre aux demandes", icon:"🛡️", c:t.secondary }].map(({r,label,sub,icon,c}) => (
+            <Card key={r} onClick={() => { setRole(r); setTab("calendar"); }} style={{ padding:"18px 22px",textAlign:"left",border:`2px solid ${c}33` }}>
+              <div style={{ display:"flex",alignItems:"center",gap:12 }}><span style={{ fontSize:28 }}>{icon}</span><div><div style={{ fontWeight:700,fontSize:16,color:t.text }}>{label}</div><div style={{ fontSize:12,color:t.textMid,marginTop:2 }}>{sub}</div></div></div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ minHeight:"100vh",background:t.bg,fontFamily:"'Georgia', serif",maxWidth:600,margin:"0 auto" }}>
+      <div style={{ background:t.card,borderBottom:`1px solid ${t.border}`,padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:22 }}>🐾</span>
+          <div><div style={{ fontWeight:900,fontSize:17,color:t.text }}>Pixie</div><div style={{ fontSize:10,color:t.textMid }}>{ROLES[role].icon} {ROLES[role].label}</div></div>
+        </div>
+        <button onClick={() => setRole(null)} style={{ background:"none",border:`1px solid ${t.border}`,borderRadius:t.radiusSm,padding:"5px 12px",fontSize:12,color:t.textMid,cursor:"pointer",fontFamily:"inherit" }}>Changer</button>
+      </div>
+      <div style={{ padding:"20px 16px 100px" }}>
+        {tab==="calendar" && <CalendarView events={events} setEvents={setEvents} persons={persons} role={role} observations={observations} setObservations={setObservations} />}
+        {tab==="avail" && <AvailView avails={avails} setAvails={setAvails} role={role} persons={persons} onNotify={handleNotify} />}
+        {tab==="persons" && role==="owner" && <PersonsView persons={persons} setPersons={setPersons} />}
+        {tab==="share" && role==="owner" && <ShareView events={events} persons={persons} observations={observations} />}
+        {tab==="settings" && <SettingsView notifEnabled={notifEnabled} setNotifEnabled={setNotifEnabled} role={role} events={events} persons={persons} avails={avails} observations={observations} onImport={handleImport} />}
+      </div>
+      <div style={{ position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:600,background:t.card,borderTop:`1px solid ${t.border}`,display:"flex",padding:"8px 0 14px" }}>
+        {tabs.map(tb => (
+          <button key={tb.id} onClick={() => setTab(tb.id)} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:tab===tb.id?t.primary:t.textLight,fontFamily:"inherit",position:"relative" }}>
+            <span style={{ fontSize:20 }}>{tb.icon}</span>
+            <span style={{ fontSize:10,fontWeight:tab===tb.id?700:400 }}>{tb.label}</span>
+            {tb.id==="avail"&&pendingBadge>0 && <span style={{ position:"absolute",top:-1,right:"16%",background:t.danger,color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center" }}>{pendingBadge}</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(PixieApp));
+  </script>
+</body>
+</html>
