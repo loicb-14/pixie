@@ -5,37 +5,101 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>Pixie</title>
   <link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Pixie" />
   <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- Polices du nouveau design -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Icones Lucide (couronne / bouclier / chevrons) -->
+  <script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.min.js"></script>
+
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #FDF6EE; font-family: Georgia, serif; }
-  </style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: #EFE7DC; font-family: 'Hanken Grotesk', system-ui, sans-serif; }
+  #root { min-height: 100vh; }
+  /* --- design-layer polish (lives outside the app logic) --- */
+  button { transition: filter .15s ease, transform .1s ease, box-shadow .15s ease; }
+  button:hover { filter: brightness(0.985); }
+  button:active { transform: translateY(1px); }
+  input, select, textarea { transition: border-color .15s ease, box-shadow .15s ease; }
+  input:focus, select:focus, textarea:focus { border-color: #D2734E !important; box-shadow: 0 0 0 3px rgba(210,115,78,0.16) !important; }
+  ::selection { background: rgba(210,115,78,0.22); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #DBCFBE; border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+
+  /* --- Pixie : peek + grain (additif, scopé, n'affecte rien d'autre) --- */
+  .pxp-trail{position:absolute;inset:0;z-index:0;pointer-events:none;color:#2B2113;}
+  .pxp-trail svg{position:absolute;}
+  .pxp-trail .s1{top:6%;left:6%;width:22px;height:22px;transform:rotate(-12deg);opacity:.030;}
+  .pxp-trail .s2{top:9%;right:7%;width:18px;height:18px;transform:rotate(20deg);opacity:.018;}
+  .pxp-trail .s3{top:19%;left:16%;width:16px;height:16px;transform:rotate(6deg);opacity:.015;}
+  .pxp-trail .s4{top:23%;right:-1%;width:24px;height:24px;transform:rotate(-22deg);opacity:.028;}
+  .pxp-trail .s5{top:35%;left:-1%;width:20px;height:20px;transform:rotate(12deg);opacity:.020;}
+  .pxp-trail .s6{top:41%;right:4%;width:18px;height:18px;transform:rotate(26deg);opacity:.016;}
+  .pxp-trail .s7{top:54%;left:7%;width:22px;height:22px;transform:rotate(-16deg);opacity:.030;}
+  .pxp-trail .s8{top:60%;right:-2%;width:20px;height:20px;transform:rotate(10deg);opacity:.020;}
+  .pxp-trail .s9{bottom:22%;left:14%;width:18px;height:18px;transform:rotate(-8deg);opacity:.024;}
+  .pxp-trail .s10{bottom:15%;right:9%;width:24px;height:24px;transform:rotate(18deg);opacity:.030;}
+  .pxp-trail .s11{bottom:8%;left:4%;width:20px;height:20px;transform:rotate(-20deg);opacity:.017;}
+  .pxp-trail .s12{bottom:5%;right:18%;width:18px;height:18px;transform:rotate(14deg);opacity:.022;}
+  .pxp-peek{position:absolute;left:50%;bottom:0;width:200px;z-index:2;transform:translate(-50%,122%);transition:transform 1.2s cubic-bezier(.34,1.35,.5,1);}
+  .pxp-peek.pxp-show{transform:translate(-50%,44%);}
+  .pxp-peek.pxp-empty{position:fixed;left:auto;right:max(6px,calc(50% - 306px));bottom:0;width:140px;z-index:80;transform:translate(0,124%) rotate(-6deg);}
+  .pxp-peek.pxp-empty.pxp-show{transform:translate(0,-4%) rotate(-6deg);}
+  .pxp-dog{position:relative;width:100%;animation:pxp-bob 4.6s ease-in-out infinite;transform-origin:50% 90%;}
+  @keyframes pxp-bob{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-6px) rotate(-1.5deg)}}
+  .pxp-layer{display:block;width:100%;height:auto;pointer-events:none;user-select:none;}
+  .pxp-pupils,.pxp-lids{position:absolute;top:0;left:0;}
+  .pxp-pupils{transition:transform .13s ease-out;will-change:transform;}
+  .pxp-lids{opacity:0;transition:opacity .07s ease;}
+</style>
 </head>
 <body>
   <div id="root"></div>
+
+  <!-- Motif de patoune (symbole utilise par le design) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="pxp-paw" viewBox="0 0 100 100"><g fill="currentColor">
+    <ellipse cx="30" cy="41" rx="9" ry="12" transform="rotate(-18 30 41)"/>
+    <ellipse cx="43" cy="30" rx="9.5" ry="13"/>
+    <ellipse cx="57" cy="30" rx="9.5" ry="13"/>
+    <ellipse cx="70" cy="41" rx="9" ry="12" transform="rotate(18 70 41)"/>
+    <path d="M50 50c12 0 21 8 21 17.5 0 8-6.6 12.6-13.4 12.6-3.5 0-4.9-1.4-7.6-1.4s-4.1 1.4-7.6 1.4C35.6 80.1 29 75.5 29 67.5 29 58 38 50 50 50Z"/>
+  </g></symbol>
+</defs></svg>
+
+  <!-- React + Babel : builds de PRODUCTION, identiques a ta version actuelle -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+  <!-- Connexion Supabase : INCHANGEE (reprise telle quelle de la prod) -->
   <script>
     const SUPABASE_URL = "https://wdfynelkfgcoxycabrfp.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndkZnluZWxrZmdjb3h5Y2FicmZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NDQ1NjksImV4cCI6MjA5MjQyMDU2OX0.rQzCAlc1viHfChSZbyLMrmiNj38UNaA44T981RcK06Q";
   </script>
-  <script type="text/babel">
-    const { useState, useEffect, useCallback } = React;
 
+  <!-- Application : design mis a jour + useStorage Supabase d'origine restaure -->
+  <script type="text/babel">
+const { useState, useEffect, useCallback } = React;
 
 const t = {
-  bg: "#FDF6EE", card: "#FFFFFF", primary: "#E8845A", primaryLight: "#FDEEE6",
-  secondary: "#6B9E8A", secondaryLight: "#EAF4F0", accent: "#F2C46D", accentLight: "#FEF8E7",
-  purple: "#9B7EC8", purpleLight: "#F2ECFB", text: "#2C2416", textMid: "#7A6A58",
-  textLight: "#B0A090", border: "#EDE4D8", danger: "#E05C5C", dangerLight: "#FEE8E8",
-  shadow: "0 4px 24px rgba(44,36,22,0.08)", radius: "16px", radiusSm: "10px",
-  green: "#4CAF82", greenLight: "#E8F5EE",
-  amber: "#E8A030", amberLight: "#FEF3E2",
+  fontUI: "'Hanken Grotesk', system-ui, -apple-system, sans-serif",
+  fontDisplay: "'Source Serif 4', Georgia, serif",
+  bg: "#FBF5EE", card: "#FFFFFF", primary: "#D2734E", primaryLight: "#FBEADF",
+  secondary: "#5E9C84", secondaryLight: "#E6F2EC", accent: "#E3A94E", accentLight: "#FCF2DD",
+  purple: "#8E76C4", purpleLight: "#EFEAF8", text: "#2B2113", textMid: "#766857",
+  textLight: "#A99B88", border: "#EEE6DB", danger: "#D45B57", dangerLight: "#FBE7E5",
+  shadow: "0 1px 2px rgba(58,40,18,0.04), 0 10px 26px -10px rgba(58,40,18,0.16)", radius: "20px", radiusSm: "12px",
+  green: "#3FA378", greenLight: "#E6F4EC",
+  amber: "#DA9326", amberLight: "#FBF0DD",
 };
 
 const LAYERS = [
@@ -100,11 +164,59 @@ const useStorage = () => {
 };
 const sendNotif = (title, body) => { if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(title, { body }); };
 
+const Ico = ({ name, color, size = 18, style }) => {
+  const lib = (typeof window !== "undefined" && window.lucide && (window.lucide.icons || window.lucide)) || {};
+  const node = lib[name];
+  if (!node || !Array.isArray(node)) return null;
+  const kids = (node[2] || []).map((c, i) => React.createElement(c[0], { key: i, ...c[1] }));
+  return React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color || "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", style: { flexShrink: 0, display: "block", ...style } }, kids);
+};
+const LAYER_ICON = { walk: "PawPrint", treatment: "Pill", vet: "Stethoscope", other: "Pin", athome: "House", unavail: "Ban" };
+const TOD_ICON = { morning: "Sunrise", noon: "Sun", afternoon: "CloudSun", evening: "Moon" };
+const NAV_ICON = { calendar: "CalendarDays", avail: "Handshake", persons: "Users", share: "Share2", settings: "Settings" };
+const ROLE_ICON = { owner: "Crown", guardian: "ShieldCheck" };
+
+function PawTrail(){
+  return <div className="pxp-trail">{[1,2,3,4,5,6,7,8,9,10,11,12].map(n=><svg key={n} className={"s"+n}><use href="#pxp-paw"/></svg>)}</div>;
+}
+function PixiePeek({ variant }){
+  const ref = React.useRef(null);
+  React.useEffect(()=>{
+    const root = ref.current; if(!root) return;
+    const dog = root.querySelector('.pxp-dog'), pupils = root.querySelector('.pxp-pupils'), lids = root.querySelector('.pxp-lids');
+    const setP=(tx,ty)=>{ pupils.style.transform=`translate(${tx}px,${ty}px)`; };
+    function aim(cx,cy){ const r=dog.getBoundingClientRect(); const ex=r.left+r.width*0.5, ey=r.top+r.height*0.42, dx=cx-ex, dy=cy-ey, a=Math.atan2(dy,dx); const MAX=(pupils.offsetWidth||150)*0.03, pull=Math.min(1,Math.hypot(dx,dy)/(r.width*1.1)); setP(Math.cos(a)*MAX*pull, Math.sin(a)*MAX*pull); }
+    let raf=null,tt=Math.random()*10,tm=null;
+    function wander(){ tt+=0.012; const r=dog.getBoundingClientRect(); aim(r.left+r.width*0.5+Math.cos(tt)*r.width*0.9, r.top+r.height*0.42+Math.sin(tt*0.8)*r.height*0.6); raf=requestAnimationFrame(wander); }
+    const startW=()=>{ if(!raf) wander(); }, stopW=()=>{ if(raf){ cancelAnimationFrame(raf); raf=null; } };
+    const onMove=e=>{ stopW(); aim(e.clientX,e.clientY); clearTimeout(tm); tm=setTimeout(startW,2400); };
+    const to1=setTimeout(startW,2000);
+    let blinkTO; function blink(){ lids.style.opacity=1; setTimeout(()=>lids.style.opacity=0,125); blinkTO=setTimeout(blink,3200+Math.random()*4200); } const to2=setTimeout(blink,2600);
+    let shown=false, hideT, idleT;
+    function up(hold){ root.classList.add('pxp-show'); shown=true; clearTimeout(hideT); hideT=setTimeout(down,hold); }
+    function down(){ root.classList.remove('pxp-show'); shown=false; }
+    function resetIdle(){ clearTimeout(idleT); idleT=setTimeout(()=>{ if(!shown) up(4700); }, 9000+Math.random()*5000); }
+    const to3=setTimeout(()=>up(4700), 900);
+    const onTilt=e=>{ if(e.gamma==null) return; stopW(); const r=dog.getBoundingClientRect(), MAX=r.width*0.03; setP(Math.max(-1,Math.min(1,e.gamma/28))*MAX, Math.max(-1,Math.min(1,(e.beta-42)/28))*MAX); };
+    addEventListener('mousemove', onMove); addEventListener('mousemove', resetIdle); addEventListener('pointerdown', resetIdle); addEventListener('deviceorientation', onTilt);
+    resetIdle();
+    return ()=>{ stopW(); removeEventListener('mousemove', onMove); removeEventListener('mousemove', resetIdle); removeEventListener('pointerdown', resetIdle); removeEventListener('deviceorientation', onTilt); [tm,to1,to2,to3,blinkTO,hideT,idleT].forEach(clearTimeout); };
+  }, []);
+  return (
+    <div ref={ref} className={"pxp-peek" + (variant==="empty" ? " pxp-empty" : "")}>
+      <div className="pxp-dog">
+        <img className="pxp-layer" src="pixie-corps.png" alt="Pixie" />
+        <img className="pxp-layer pxp-pupils" src="pixie-pupilles.png" alt="" />
+        <img className="pxp-layer pxp-lids" src="pixie-paupieres.png" alt="" />
+      </div>
+    </div>
+  );
+}
 const Card = ({ children, style, onClick }) => (
   <div onClick={onClick} style={{ background: t.card, borderRadius: t.radius, boxShadow: t.shadow, border: `1px solid ${t.border}`, cursor: onClick ? "pointer" : "default", ...style }}>{children}</div>
 );
 const Btn = ({ children, onClick, variant = "primary", small, style, disabled }) => {
-  const v = { primary: { background: t.primary, color: "#fff", border: "none" }, secondary: { background: t.secondaryLight, color: t.secondary, border: `1px solid ${t.secondary}44` }, ghost: { background: "transparent", color: t.textMid, border: `1px solid ${t.border}` }, danger: { background: t.dangerLight, color: t.danger, border: `1px solid ${t.danger}44` }, success: { background: t.secondaryLight, color: t.secondary, border: `1px solid ${t.secondary}` } };
+  const v = { primary: { background: t.primary, color: "#fff", border: "none", boxShadow: "0 6px 16px -6px " + t.primary + "99" }, secondary: { background: t.secondaryLight, color: t.secondary, border: `1px solid ${t.secondary}44` }, ghost: { background: "transparent", color: t.textMid, border: `1px solid ${t.border}` }, danger: { background: t.dangerLight, color: t.danger, border: `1px solid ${t.danger}44` }, success: { background: t.secondaryLight, color: t.secondary, border: `1px solid ${t.secondary}` } };
   return <button onClick={onClick} disabled={disabled} style={{ ...v[variant], borderRadius: t.radiusSm, padding: small ? "6px 14px" : "10px 20px", fontSize: small ? 12 : 14, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, fontFamily: "inherit", transition: "all 0.15s", ...style }}>{children}</button>;
 };
 const Tag = ({ color, children, small }) => <span style={{ background: color + "22", color, border: `1px solid ${color}44`, borderRadius: 20, padding: small ? "2px 8px" : "4px 12px", fontSize: small ? 11 : 12, fontWeight: 600, whiteSpace: "nowrap" }}>{children}</span>;
@@ -200,7 +312,7 @@ function EventCard({ ev, persons, role, onDelete, onTrack, onReassignDose, onRea
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 16 }}>{layer.icon}</span>
+            <span style={{ fontSize: 14, width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 9, background: layer.color + "22", flexShrink: 0 }}>{layer.icon}</span>
             <span style={{ fontWeight: 700, fontSize: 14, color: t.text }}>{ev.title}</span>
             {ev.layer === "treatment" && !hasDoses && ev.tracked && <Tag color={ev.tracked === "done" ? t.secondary : t.danger} small>{ev.tracked === "done" ? "✓ Donné" : "✗ Non donné"}</Tag>}
             {ev.layer === "treatment" && hasDoses && allTracked && <Tag color={t.secondary} small>✓ Toutes les prises</Tag>}
@@ -309,23 +421,28 @@ function MonthGrid({ year, month, events, activeLayer, selected, setSelected }) 
 
 function WeekGrid({ weekDays, events, activeLayer, selected, setSelected }) {
   return (
-    <div style={{ overflowX: "auto" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "44px repeat(7,1fr)", minWidth: 340 }}>
+    <div style={{ overflowX: "auto", margin: "0 -4px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "42px repeat(7,1fr)", minWidth: 360, padding: "0 4px" }}>
         <div />
         {weekDays.map(ds => {
           const d = new Date(ds+"T12:00:00"), isToday = ds===todayStr(), isSel = ds===selected;
-          return <div key={ds} onClick={() => setSelected(ds)} style={{ textAlign: "center", padding: "6px 2px", cursor: "pointer", borderRadius: 8, background: isSel ? t.primary : isToday ? t.primaryLight : "transparent", color: isSel ? "#fff" : isToday ? t.primary : t.text, fontWeight: isSel||isToday ? 700 : 400, fontSize: 11 }}><div style={{ opacity: 0.7 }}>{d.toLocaleDateString("fr-FR",{weekday:"short"})}</div><div style={{ fontSize: 14 }}>{d.getDate()}</div></div>;
+          return <div key={ds} onClick={() => setSelected(ds)} style={{ textAlign: "center", padding: "2px 2px 8px", cursor: "pointer" }}>
+            <div style={{ fontSize: 10, color: t.textLight, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 3 }}>{d.toLocaleDateString("fr-FR",{weekday:"short"}).replace(".","")}</div>
+            <div style={{ width: 26, height: 26, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 999, fontSize: 13, fontWeight: isSel||isToday ? 700 : 500, background: isSel ? t.primary : isToday ? t.primaryLight : "transparent", color: isSel ? "#fff" : isToday ? t.primary : t.text }}>{d.getDate()}</div>
+          </div>;
         })}
-        {TIMES_OF_DAY.map(tod => (<>
-          <div key={tod.id+"l"} style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 6, fontSize: 14, color: t.textLight }}>{tod.icon}</div>
-          {weekDays.map(ds => {
-            const dayEvs = events.filter(e => e.date===ds && (activeLayer ? e.layer===activeLayer : e.layer!=="unavail") && ((e.timeOfDay===tod.id)||(e.time&&parseInt(e.time)>=tod.hour&&parseInt(e.time)<(TIMES_OF_DAY[TIMES_OF_DAY.findIndex(x=>x.id===tod.id)+1]?.hour||24))||(e.doses&&e.doses.some(d=>d.timeOfDay===tod.id))));
-            const isUnavail = events.some(e => e.date===ds && e.layer==="unavail");
-            const isAtHome = events.some(e => e.date===ds && e.layer==="athome");
-            const cellBg = isUnavail && isAtHome ? t.amberLight+"66" : isUnavail ? t.dangerLight+"66" : isAtHome ? t.greenLight+"66" : "transparent";
-            return <div key={ds+tod.id} onClick={() => setSelected(ds)} style={{ minHeight: 48, borderTop: `1px solid ${t.border}`, borderLeft: `1px solid ${t.border}`, padding: 3, cursor: "pointer", background: cellBg }}>{dayEvs.map(ev => { const l=layerFor(ev.layer); return <div key={ev.id} style={{ background: l.color+"22", border: `1px solid ${l.color}44`, borderRadius: 5, padding: "1px 4px", fontSize: 10, fontWeight: 600, color: l.color, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.icon} {ev.title}</div>; })}</div>;
-          })}
-        </>))}
+        {TIMES_OF_DAY.map(tod => (
+          <React.Fragment key={tod.id}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 8 }}><span style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: t.accentLight, fontSize: 14 }}>{tod.icon}</span></div>
+            {weekDays.map(ds => {
+              const dayEvs = events.filter(e => e.date===ds && (activeLayer ? e.layer===activeLayer : e.layer!=="unavail") && ((e.timeOfDay===tod.id)||(e.time&&parseInt(e.time)>=tod.hour&&parseInt(e.time)<(TIMES_OF_DAY[TIMES_OF_DAY.findIndex(x=>x.id===tod.id)+1]?.hour||24))||(e.doses&&e.doses.some(d=>d.timeOfDay===tod.id))));
+              const isUnavail = events.some(e => e.date===ds && e.layer==="unavail");
+              const isSel = ds===selected;
+              const cellBg = isSel ? t.primary+"0D" : isUnavail ? t.dangerLight+"44" : "transparent";
+              return <div key={ds+tod.id} onClick={() => setSelected(ds)} style={{ minHeight: 50, borderTop: `1px solid ${t.border}`, padding: "4px 3px", cursor: "pointer", background: cellBg, display: "flex", flexDirection: "column", gap: 3 }}>{dayEvs.map(ev => { const l=layerFor(ev.layer); return <div key={ev.id} title={ev.title} style={{ background: l.color+"1F", borderRadius: 7, padding: "2px 5px", fontSize: 10, fontWeight: 600, color: l.color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.45 }}>{l.icon} {ev.title}</div>; })}</div>;
+            })}
+          </React.Fragment>
+        ))}
       </div>
     </div>
   );
@@ -478,7 +595,7 @@ function CalendarView({ events, setEvents, persons, role, observations, setObser
   const [addingObs, setAddingObs] = useState(false);
   const weekDays = getWeekDays(selected);
   const activeObs = observations.filter(o => o.expires >= todayStr());
-  const selEvents = events.filter(e => e.date===selected && e.layer!=="unavail" && e.layer!=="athome" && (activeLayer ? e.layer===activeLayer : true));
+  const selEvents = events.filter(e => e.date===selected && e.layer!=="unavail" && (activeLayer ? e.layer===activeLayer : true));
   const selUnavails = events.filter(e => e.date===selected && e.layer==="unavail");
   const selAtHome = events.filter(e => e.date===selected && e.layer==="athome");
   const hasBothStatus = selUnavails.length > 0 && selAtHome.length > 0;
@@ -500,16 +617,19 @@ function CalendarView({ events, setEvents, persons, role, observations, setObser
           </div>
         );
       })}
-      <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center" }}>
-        <button onClick={() => setActiveLayer(null)} style={{ padding:"5px 13px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`2px solid ${t.border}`,background:!activeLayer?t.text:"transparent",color:!activeLayer?"#fff":t.textMid,fontFamily:"inherit" }}>Tout</button>
-        {LAYERS.map(l => <button key={l.id} onClick={() => setActiveLayer(al=>al===l.id?null:l.id)} style={{ padding:"5px 13px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`2px solid ${l.color}`,background:activeLayer===l.id?l.color:"transparent",color:activeLayer===l.id?"#fff":l.color,fontFamily:"inherit",transition:"all 0.15s" }}>{l.icon} {l.label}</button>)}
+      <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+        <span style={{ fontSize:10,fontWeight:700,letterSpacing:0.6,textTransform:"uppercase",color:t.textLight }}>Afficher</span>
+        <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
+          <button onClick={() => setActiveLayer(null)} style={{ display:"inline-flex",alignItems:"center",gap:6,padding:"5px 12px",borderRadius:999,fontSize:12.5,fontWeight:600,cursor:"pointer",border:"none",background:!activeLayer?t.text:t.bg,color:!activeLayer?"#fff":t.textMid,fontFamily:"inherit",transition:"all 0.15s",whiteSpace:"nowrap" }}>Tout</button>
+          {LAYERS.map(l => { const on = activeLayer===l.id; return <button key={l.id} onClick={() => setActiveLayer(al=>al===l.id?null:l.id)} style={{ display:"inline-flex",alignItems:"center",gap:6,padding:"5px 13px",borderRadius:999,fontSize:12.5,fontWeight:600,cursor:"pointer",border:"none",background:on?l.color+"22":t.bg,color:on?l.color:t.textMid,fontFamily:"inherit",transition:"all 0.15s",whiteSpace:"nowrap" }}>{l.icon} {l.label}</button>; })}
+        </div>
       </div>
       <Card style={{ padding:16 }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
           <Btn onClick={prevPeriod} variant="ghost" small>‹</Btn>
           <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:4 }}>
-            <span style={{ fontWeight:700,fontSize:14,color:t.text,textTransform:"capitalize" }}>{periodLabel}</span>
-            <button onClick={() => setViewMode(v=>v==="month"?"week":"month")} style={{ fontSize:11,fontWeight:600,color:t.primary,background:t.primaryLight,border:"none",borderRadius:10,padding:"2px 10px",cursor:"pointer",fontFamily:"inherit" }}>{viewMode==="month"?"Vue semaine →":"← Vue mois"}</button>
+            <span style={{ fontWeight:700,fontSize:16,color:t.text,textTransform:"capitalize",fontFamily:t.fontDisplay,whiteSpace:"nowrap",lineHeight:1.1 }}>{periodLabel}</span>
+            <button onClick={() => setViewMode(v=>v==="month"?"week":"month")} style={{ fontSize:11,fontWeight:600,color:t.primary,background:t.primaryLight,border:"none",borderRadius:10,padding:"3px 12px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap" }}>{viewMode==="month"?"Vue semaine →":"← Vue mois"}</button>
           </div>
           <Btn onClick={nextPeriod} variant="ghost" small>›</Btn>
         </div>
@@ -544,7 +664,7 @@ function CalendarView({ events, setEvents, persons, role, observations, setObser
             {role==="owner" && <button onClick={() => deleteEv(a.id)} style={{ background:"none",border:"none",cursor:"pointer",color:t.green,fontSize:14 }}>🗑</button>}
           </div>
         ))}
-        {selEvents.length===0&&selUnavails.length===0&&selAtHome.length===0 ? <div style={{ textAlign:"center",padding:"28px 0",color:t.textLight,fontSize:14 }}>Rien de prévu ce jour 🌿</div> : selEvents.map(ev => <EventCard key={ev.id} ev={ev} persons={persons} role={role} onDelete={deleteEv} onTrack={trackTx} onReassignDose={reassignDose} onReassignTx={reassignTx} />)}
+        {selEvents.length===0&&selUnavails.length===0&&selAtHome.length===0 ? <><div style={{ textAlign:"center",padding:"28px 0",color:t.textLight,fontSize:14 }}>Rien de prévu ce jour 🌿</div><PixiePeek variant="empty" /></> : selEvents.map(ev => <EventCard key={ev.id} ev={ev} persons={persons} role={role} onDelete={deleteEv} onTrack={trackTx} onReassignDose={reassignDose} onReassignTx={reassignTx} />)}
       </div>
       {addingEvent && <AddEventModal defaultDate={selected} persons={persons} onSave={ev=>setEvents(es=>[...es,ev])} onClose={() => setAddingEvent(false)} role={role} />}
       {addingObs && <AddObsModal role={role} persons={persons} onSave={o=>setObservations(obs=>[...obs,o])} onClose={() => setAddingObs(false)} />}
@@ -640,18 +760,16 @@ function ShareView({ events, persons, observations }) {
   const [targetId, setTargetId] = useState(persons[0]?.id || "");
   const [excluded, setExcluded] = useState(new Set());
   const [includedObs, setIncludedObs] = useState(new Set());
-  const [includedNotes, setIncludedNotes] = useState(new Set());
   const [copied, setCopied] = useState(false);
 
   const effectiveFrom = singleDay ? date : from;
   const effectiveTo = singleDay ? date : to;
   const target = persons.find(p=>p.id===targetId);
   const filtered = events.filter(e=>e.date>=effectiveFrom&&e.date<=effectiveTo&&e.layer!=="unavail"&&e.layer!=="athome").sort((a,b)=>a.date.localeCompare(b.date));
-  const activeObs = observations.filter(o => o.expires >= todayStr() && o.text?.trim() && o.authorRole === "owner");
+  const activeObs = observations.filter(o => o.expires >= todayStr() && o.text?.trim());
 
   const toggleEvent = (id) => setExcluded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleObs = (id) => setIncludedObs(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const toggleNote = (id) => setIncludedNotes(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const resolvePersonName = (personId) => { if (!personId) return null; if (personId === "__self_owner__") return "moi"; if (personId === "__self_guardian__") return persons.find(p=>p.role==="guardian")?.name || "le gardien"; return persons.find(p=>p.id===personId)?.name || null; };
 
@@ -676,7 +794,7 @@ function ShareView({ events, persons, observations }) {
   const selectedEvents = filtered.filter(e => !excluded.has(e.id));
   const selectedObs = activeObs.filter(o => includedObs.has(o.id));
 
-  const evLines = selectedEvents.length===0 ? "Aucun événement sur cette période." : selectedEvents.map(ev=>{ const l=layerFor(ev.layer); const noteStr = ev.notes && includedNotes.has(ev.id) ? `\n   → ${ev.notes}` : ""; return `${fmtDate(ev.date)} — ${l.icon} ${ev.title}${formatDoses(ev)}${noteStr}`; }).join("\n");
+  const evLines = selectedEvents.length===0 ? "Aucun événement sur cette période." : selectedEvents.map(ev=>{ const l=layerFor(ev.layer); return `${fmtDate(ev.date)} — ${l.icon} ${ev.title}${formatDoses(ev)}${ev.notes?`\n   → ${ev.notes}`:""}`; }).join("\n");
   const obsLines = selectedObs.length > 0 ? "\n\n📋 Notes :\n" + selectedObs.map(o => `• ${o.text}`).join("\n") : "";
   const greeting = target ? `Salut ${target.name} ! Voici les infos pour Pixie` : "Infos pour Pixie";
   const dateLabel = singleDay ? `le ${fmtShort(date)}` : `du ${fmtShortNum(effectiveFrom)} au ${fmtShortNum(effectiveTo)}`;
@@ -695,6 +813,7 @@ function ShareView({ events, persons, observations }) {
         </div>
       </Card>
 
+      {/* Event checklist */}
       {filtered.length > 0 && (
         <Card style={{ padding:20 }}>
           <div style={{ fontWeight:700,fontSize:13,color:t.text,marginBottom:12 }}>Sélectionner les événements à inclure</div>
@@ -702,26 +821,18 @@ function ShareView({ events, persons, observations }) {
             {filtered.map(ev => {
               const layer = layerFor(ev.layer);
               const isChecked = !excluded.has(ev.id);
-              const noteChecked = includedNotes.has(ev.id);
               return (
-                <div key={ev.id} style={{ display:"flex",flexDirection:"column",gap:4 }}>
-                  <label style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"8px 10px",borderRadius:t.radiusSm,background:isChecked?layer.color+"11":t.bg,border:`1px solid ${isChecked?layer.color+"44":t.border}`,transition:"all 0.12s" }}>
-                    <input type="checkbox" checked={isChecked} onChange={()=>toggleEvent(ev.id)} style={{ width:16,height:16,accentColor:layer.color,flexShrink:0 }} />
-                    <span style={{ fontSize:13,color:isChecked?t.text:t.textLight }}>{layer.icon} {fmtDate(ev.date)} — {ev.title}</span>
-                  </label>
-                  {ev.notes && isChecked && (
-                    <label style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"6px 10px 6px 36px",borderRadius:t.radiusSm,background:noteChecked?t.accentLight:t.bg,border:`1px solid ${noteChecked?t.accent+"44":t.border}`,transition:"all 0.12s" }}>
-                      <input type="checkbox" checked={noteChecked} onChange={()=>toggleNote(ev.id)} style={{ width:14,height:14,accentColor:t.accent,flexShrink:0 }} />
-                      <span style={{ fontSize:12,color:noteChecked?t.text:t.textLight,fontStyle:"italic" }}>📝 Inclure la note : "{ev.notes}"</span>
-                    </label>
-                  )}
-                </div>
+                <label key={ev.id} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"8px 10px",borderRadius:t.radiusSm,background:isChecked?layer.color+"11":t.bg,border:`1px solid ${isChecked?layer.color+"44":t.border}`,transition:"all 0.12s" }}>
+                  <input type="checkbox" checked={isChecked} onChange={()=>toggleEvent(ev.id)} style={{ width:16,height:16,accentColor:layer.color,flexShrink:0 }} />
+                  <span style={{ fontSize:13,color:isChecked?t.text:t.textLight }}>{layer.icon} {fmtDate(ev.date)} — {ev.title}</span>
+                </label>
               );
             })}
           </div>
         </Card>
       )}
 
+      {/* Observations checklist — always shown */}
       <Card style={{ padding:20 }}>
         <div style={{ fontWeight:700,fontSize:13,color:t.text,marginBottom:12 }}>Notes à inclure <span style={{ fontSize:11,fontWeight:400,color:t.textMid }}>(décochées par défaut)</span></div>
         {activeObs.length === 0
@@ -740,6 +851,7 @@ function ShareView({ events, persons, observations }) {
         }
       </Card>
 
+      {/* Preview */}
       <Card style={{ padding:20 }}>
         <div style={{ fontWeight:700,fontSize:13,color:t.text,marginBottom:10 }}>Aperçu</div>
         <pre style={{ fontSize:12,color:t.textMid,whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.7,background:t.bg,padding:14,borderRadius:t.radiusSm,margin:0 }}>{fullText}</pre>
@@ -749,37 +861,19 @@ function ShareView({ events, persons, observations }) {
   );
 }
 
-function SettingsView({ notifEnabled, setNotifEnabled, role, events, persons, avails, observations, onImport }) {
+function PensionView(){
+  return (
+    <div style={{ display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",minHeight:"62vh",gap:10,padding:"0 24px" }}>
+      <div style={{ fontSize:50 }}>🏡</div>
+      <div style={{ fontFamily:t.fontDisplay,fontSize:25,fontWeight:600,color:t.text }}>Pension</div>
+      <span style={{ fontSize:10.5,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:t.primary,background:t.primaryLight,padding:"4px 12px",borderRadius:999,whiteSpace:"nowrap" }}>À venir · V2</span>
+      <p style={{ fontSize:14,color:t.textMid,lineHeight:1.55,maxWidth:280,marginTop:6 }}>Bientôt : contacte du pensionnaire de confiance — demande deréservation, séjours et suivi, au même endroit.</p>
+    </div>
+  );
+}
+function SettingsView({ notifEnabled, setNotifEnabled, role }) {
   const [perm, setPerm] = useState(typeof Notification!=="undefined"?Notification.permission:"unsupported");
-  const [importConfirm, setImportConfirm] = useState(false);
-  const [importError, setImportError] = useState("");
   const requestPerm = async () => { if(!("Notification" in window)) return; const p=await Notification.requestPermission(); setPerm(p); if(p==="granted") setNotifEnabled(true); };
-
-  const handleExport = () => {
-    const data = { version: 1, exportedAt: new Date().toISOString(), events, persons, avails, observations };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `pixie-backup-${todayStr()}.json`; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImport = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        if (!data.events || !data.persons) { setImportError("Fichier invalide ou incompatible."); return; }
-        setImportConfirm(data);
-        setImportError("");
-      } catch { setImportError("Impossible de lire ce fichier."); }
-    };
-    reader.readAsText(file);
-    e.target.value = "";
-  };
-
   return (
     <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
       <Card style={{ padding:20 }}>
@@ -793,29 +887,6 @@ function SettingsView({ notifEnabled, setNotifEnabled, role, events, persons, av
         <div style={{ fontWeight:700,fontSize:14,color:t.text,marginBottom:10 }}>📱 Installer sur l'écran d'accueil</div>
         <div style={{ fontSize:13,color:t.textMid,lineHeight:1.8 }}><b>iPhone (Safari) :</b> icône Partager ↑ → "Sur l'écran d'accueil"<br /><b>Android (Chrome) :</b> menu ⋮ → "Ajouter à l'écran d'accueil"</div>
       </Card>
-      {role === "owner" && (
-        <Card style={{ padding:20 }}>
-          <div style={{ fontWeight:700,fontSize:14,color:t.text,marginBottom:6 }}>💾 Sauvegarde des données</div>
-          <div style={{ fontSize:12,color:t.textMid,marginBottom:14,lineHeight:1.6 }}>Exporte toutes les données dans un fichier JSON. Conserve-le précieusement — il permet de tout restaurer en cas de besoin.</div>
-          <Btn onClick={handleExport} variant="secondary" style={{ width:"100%", marginBottom:12 }}>📥 Exporter mes données</Btn>
-          <div style={{ fontSize:12,color:t.textMid,marginBottom:8,fontWeight:600 }}>Restaurer depuis un fichier</div>
-          <label style={{ display:"block", cursor:"pointer" }}>
-            <div style={{ background:t.bg, border:`1.5px dashed ${t.border}`, borderRadius:t.radiusSm, padding:"12px 16px", textAlign:"center", fontSize:13, color:t.textMid }}>📂 Choisir un fichier .json</div>
-            <input type="file" accept=".json" onChange={handleImport} style={{ display:"none" }} />
-          </label>
-          {importError && <div style={{ fontSize:12,color:t.danger,marginTop:8 }}>{importError}</div>}
-          {importConfirm && (
-            <div style={{ marginTop:12, padding:14, background:t.dangerLight, borderRadius:t.radiusSm, border:`1px solid ${t.danger}44` }}>
-              <div style={{ fontSize:13,fontWeight:600,color:t.danger,marginBottom:8 }}>⚠️ Cette action remplacera toutes les données actuelles.</div>
-              <div style={{ fontSize:12,color:t.textMid,marginBottom:12 }}>Fichier du {new Date(importConfirm.exportedAt).toLocaleDateString("fr-FR")} — {importConfirm.events?.length || 0} événements, {importConfirm.persons?.length || 0} personnes</div>
-              <div style={{ display:"flex",gap:10 }}>
-                <Btn onClick={() => setImportConfirm(false)} variant="ghost" small style={{flex:1}}>Annuler</Btn>
-                <Btn onClick={() => { onImport(importConfirm); setImportConfirm(false); }} variant="danger" small style={{flex:1}}>Confirmer l'import</Btn>
-              </div>
-            </div>
-          )}
-        </Card>
-      )}
     </div>
   );
 }
@@ -845,41 +916,48 @@ function PixieApp() {
   useEffect(()=>{ if(loaded) save("pixie-ob4",observations); },[observations,loaded]);
   useEffect(()=>{ if(loaded) save("pixie-nf4",notifEnabled); },[notifEnabled,loaded]);
 
-  const handleImport = (data) => {
-    if (data.events) setEvents(data.events);
-    if (data.persons) setPersons(data.persons);
-    if (data.avails) setAvails(data.avails);
-    if (data.observations) setObservations(data.observations.filter(o=>o.expires>=todayStr()));
-  };
   const pendingBadge = role==="guardian" ? avails.filter(a=>a.date>=todayStr()&&!Object.keys(a.responses).length).length : 0;
   const handleNotify = (targetRole,title,body) => { if(role!==targetRole&&notifEnabled) sendNotif(title,body); };
-  const TABS_O = [{id:"calendar",label:"Calendrier",icon:"📅"},{id:"avail",label:"Dispos",icon:"🤝"},{id:"persons",label:"Personnes",icon:"👥"},{id:"share",label:"Partager",icon:"📤"},{id:"settings",label:"Réglages",icon:"⚙️"}];
+  const TABS_O = [{id:"calendar",label:"Calendrier",icon:"📅"},{id:"avail",label:"Dispos",icon:"🤝"},{id:"persons",label:"Personnes",icon:"👥"},{id:"share",label:"Partager",icon:"📤"},{id:"pension",label:"Pension",icon:"🏡",soon:true},{id:"settings",label:"Réglages",icon:"⚙️"}];
   const TABS_G = [{id:"calendar",label:"Calendrier",icon:"📅"},{id:"avail",label:"Dispos",icon:"🤝"},{id:"settings",label:"Réglages",icon:"⚙️"}];
   const tabs = role==="owner" ? TABS_O : TABS_G;
 
   if (!role) return (
-    <div style={{ minHeight:"100vh",background:t.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Georgia', serif" }}>
-      <div style={{ width:"100%",maxWidth:340,textAlign:"center" }}>
-        <div style={{ fontSize:72,marginBottom:4 }}>🐾</div>
-        <div style={{ fontSize:36,fontWeight:900,color:t.text,marginBottom:4,letterSpacing:-1 }}>Pixie</div>
-        <div style={{ fontSize:14,color:t.textMid,marginBottom:40 }}>Qui êtes-vous ?</div>
-        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
-          {[{ r:"owner", label:"Propriétaire", sub:"Accès complet", icon:"👑", c:t.primary }, { r:"guardian", label:"Gardien principal", sub:"Voir & répondre aux demandes", icon:"🛡️", c:t.secondary }].map(({r,label,sub,icon,c}) => (
-            <Card key={r} onClick={() => { setRole(r); setTab("calendar"); }} style={{ padding:"18px 22px",textAlign:"left",border:`2px solid ${c}33` }}>
-              <div style={{ display:"flex",alignItems:"center",gap:12 }}><span style={{ fontSize:28 }}>{icon}</span><div><div style={{ fontWeight:700,fontSize:16,color:t.text }}>{label}</div><div style={{ fontSize:12,color:t.textMid,marginTop:2 }}>{sub}</div></div></div>
-            </Card>
-          ))}
+    <div style={{ minHeight:"100vh",background:t.bg,fontFamily:t.fontUI,display:"flex",justifyContent:"center" }}>
+      <div style={{ position:"relative",overflow:"hidden",width:"100%",maxWidth:412,minHeight:"100vh",display:"flex",flexDirection:"column",padding:"0 30px" }}>
+        <PawTrail />
+        <div style={{ position:"relative",zIndex:1,flex:1,display:"flex",flexDirection:"column",justifyContent:"center",gap:40,padding:"44px 0" }}>
+          <div style={{ textAlign:"center" }}>
+            <div style={{ fontSize:54,lineHeight:1 }}>🐾</div>
+            <h1 style={{ fontFamily:t.fontDisplay,fontWeight:700,fontSize:42,lineHeight:1,letterSpacing:"-.01em",color:t.text,marginTop:12 }}>Pixie</h1>
+            <p style={{ marginTop:12,fontSize:14.5,color:t.textMid }}>Le quotidien canin, <b style={{ color:t.text,fontWeight:600 }}>à plusieurs mains</b>.</p>
+          </div>
+          <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+            <div style={{ display:"flex",alignItems:"center",gap:12,margin:"0 2px 2px" }}>
+              <span style={{ fontSize:11,fontWeight:700,letterSpacing:".16em",textTransform:"uppercase",color:t.textLight,whiteSpace:"nowrap" }}>Qui êtes-vous&nbsp;?</span>
+              <span style={{ flex:1,height:1,background:t.border }}></span>
+            </div>
+            {[{ r:"owner", label:"Propriétaire", sub:"Accès complet", c:t.primary }, { r:"guardian", label:"Gardien principal", sub:"Voir & répondre aux demandes", c:t.secondary }].map(({r,label,sub,c}) => (
+              <Card key={r} onClick={() => { setRole(r); setTab("calendar"); }} style={{ padding:"15px 18px",display:"flex",alignItems:"center",gap:14 }}>
+                <span style={{ width:46,height:46,borderRadius:15,display:"inline-flex",alignItems:"center",justifyContent:"center",background:c+"1A",flexShrink:0 }}><Ico name={ROLE_ICON[r]} color={c} size={24} /></span>
+                <div style={{ flex:1 }}><div style={{ fontWeight:700,fontSize:16,color:t.text }}>{label}</div><div style={{ fontSize:12.5,color:t.textMid,marginTop:3 }}>{sub}</div></div>
+                <Ico name="ChevronRight" color={t.textLight} size={20} />
+              </Card>
+            ))}
+          </div>
         </div>
+        <div style={{ position:"relative",zIndex:1,textAlign:"center",fontSize:11,fontWeight:500,letterSpacing:".04em",color:t.textLight,paddingBottom:22 }}>Pixie · version 1.7</div>
+        <PixiePeek variant="welcome" />
       </div>
     </div>
   );
 
   return (
-    <div style={{ minHeight:"100vh",background:t.bg,fontFamily:"'Georgia', serif",maxWidth:600,margin:"0 auto" }}>
+    <div style={{ minHeight:"100vh",background:t.bg,fontFamily:t.fontUI,maxWidth:600,margin:"0 auto" }}>
       <div style={{ background:t.card,borderBottom:`1px solid ${t.border}`,padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100 }}>
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
           <span style={{ fontSize:22 }}>🐾</span>
-          <div><div style={{ fontWeight:900,fontSize:17,color:t.text }}>Pixie</div><div style={{ fontSize:10,color:t.textMid }}>{ROLES[role].icon} {ROLES[role].label}</div></div>
+          <div><div style={{ fontWeight:700,fontSize:19,color:t.text,fontFamily:t.fontDisplay,letterSpacing:-0.3 }}>Pixie</div><div style={{ fontSize:10,color:t.textMid }}>{ROLES[role].icon} {ROLES[role].label}</div></div>
         </div>
         <button onClick={() => setRole(null)} style={{ background:"none",border:`1px solid ${t.border}`,borderRadius:t.radiusSm,padding:"5px 12px",fontSize:12,color:t.textMid,cursor:"pointer",fontFamily:"inherit" }}>Changer</button>
       </div>
@@ -888,14 +966,16 @@ function PixieApp() {
         {tab==="avail" && <AvailView avails={avails} setAvails={setAvails} role={role} persons={persons} onNotify={handleNotify} />}
         {tab==="persons" && role==="owner" && <PersonsView persons={persons} setPersons={setPersons} />}
         {tab==="share" && role==="owner" && <ShareView events={events} persons={persons} observations={observations} />}
-        {tab==="settings" && <SettingsView notifEnabled={notifEnabled} setNotifEnabled={setNotifEnabled} role={role} events={events} persons={persons} avails={avails} observations={observations} onImport={handleImport} />}
+        {tab==="settings" && <SettingsView notifEnabled={notifEnabled} setNotifEnabled={setNotifEnabled} role={role} />}
+        {tab==="pension" && role==="owner" && <PensionView />}
       </div>
-      <div style={{ position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:600,background:t.card,borderTop:`1px solid ${t.border}`,display:"flex",padding:"8px 0 14px" }}>
+      <div style={{ position:"fixed",zIndex:90,bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:600,background:t.card,borderTop:`1px solid ${t.border}`,display:"flex",padding:"8px 0 14px" }}>
         {tabs.map(tb => (
           <button key={tb.id} onClick={() => setTab(tb.id)} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:tab===tb.id?t.primary:t.textLight,fontFamily:"inherit",position:"relative" }}>
-            <span style={{ fontSize:20 }}>{tb.icon}</span>
+            <span style={{ fontSize:18, width:48, height:30, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:999, background: tab===tb.id ? t.primaryLight : "transparent", transition:"background .15s" }}>{tb.icon}</span>
             <span style={{ fontSize:10,fontWeight:tab===tb.id?700:400 }}>{tb.label}</span>
             {tb.id==="avail"&&pendingBadge>0 && <span style={{ position:"absolute",top:-1,right:"16%",background:t.danger,color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center" }}>{pendingBadge}</span>}
+            {tb.soon && <span style={{ position:"absolute",top:-3,right:"4%",background:t.accent,color:"#fff",borderRadius:7,padding:"1px 5px",fontSize:7.5,fontWeight:800,letterSpacing:".03em",lineHeight:1.5 }}>BIENTÔT</span>}
           </button>
         ))}
       </div>
@@ -904,8 +984,8 @@ function PixieApp() {
 }
 
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(React.createElement(PixieApp));
+ReactDOM.createRoot(document.getElementById("root")).render(<PixieApp />);
+
   </script>
 </body>
 </html>
