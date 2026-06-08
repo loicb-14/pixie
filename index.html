@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-  <!-- Icones Lucide (couronne / bouclier / chevrons) -->
+  <!-- Icones Lucide -->
   <script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.min.js"></script>
 
   <style>
@@ -80,13 +80,13 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 
-  <!-- Connexion Supabase : INCHANGEE (reprise telle quelle de la prod) -->
+  <!-- Connexion Supabase : INCHANGEE -->
   <script>
     const SUPABASE_URL = "https://wdfynelkfgcoxycabrfp.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndkZnluZWxrZmdjb3h5Y2FicmZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NDQ1NjksImV4cCI6MjA5MjQyMDU2OX0.rQzCAlc1viHfChSZbyLMrmiNj38UNaA44T981RcK06Q";
   </script>
 
-  <!-- Application : design mis a jour + useStorage Supabase d'origine restaure -->
+  <!-- Application : design + Supabase + sauvegarde restauree -->
   <script type="text/babel">
 const { useState, useEffect, useCallback } = React;
 
@@ -871,9 +871,38 @@ function PensionView(){
     </div>
   );
 }
-function SettingsView({ notifEnabled, setNotifEnabled, role }) {
+
+function SettingsView({ notifEnabled, setNotifEnabled, role, events, persons, avails, observations, onImport }) {
   const [perm, setPerm] = useState(typeof Notification!=="undefined"?Notification.permission:"unsupported");
+  const [importConfirm, setImportConfirm] = useState(false);
+  const [importError, setImportError] = useState("");
   const requestPerm = async () => { if(!("Notification" in window)) return; const p=await Notification.requestPermission(); setPerm(p); if(p==="granted") setNotifEnabled(true); };
+
+  const handleExport = () => {
+    const data = { version: 1, exportedAt: new Date().toISOString(), events, persons, avails, observations };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `pixie-backup-${todayStr()}.json`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data.events || !data.persons) { setImportError("Fichier invalide ou incompatible."); return; }
+        setImportConfirm(data);
+        setImportError("");
+      } catch { setImportError("Impossible de lire ce fichier."); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
   return (
     <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
       <Card style={{ padding:20 }}>
@@ -887,6 +916,29 @@ function SettingsView({ notifEnabled, setNotifEnabled, role }) {
         <div style={{ fontWeight:700,fontSize:14,color:t.text,marginBottom:10 }}>📱 Installer sur l'écran d'accueil</div>
         <div style={{ fontSize:13,color:t.textMid,lineHeight:1.8 }}><b>iPhone (Safari) :</b> icône Partager ↑ → "Sur l'écran d'accueil"<br /><b>Android (Chrome) :</b> menu ⋮ → "Ajouter à l'écran d'accueil"</div>
       </Card>
+      {role === "owner" && (
+        <Card style={{ padding:20 }}>
+          <div style={{ fontWeight:700,fontSize:14,color:t.text,marginBottom:6 }}>💾 Sauvegarde des données</div>
+          <div style={{ fontSize:12,color:t.textMid,marginBottom:14,lineHeight:1.6 }}>Exporte toutes les données dans un fichier JSON. Conserve-le précieusement — il permet de tout restaurer en cas de besoin.</div>
+          <Btn onClick={handleExport} variant="secondary" style={{ width:"100%", marginBottom:12 }}>📥 Exporter mes données</Btn>
+          <div style={{ fontSize:12,color:t.textMid,marginBottom:8,fontWeight:600 }}>Restaurer depuis un fichier</div>
+          <label style={{ display:"block", cursor:"pointer" }}>
+            <div style={{ background:t.bg, border:`1.5px dashed ${t.border}`, borderRadius:t.radiusSm, padding:"12px 16px", textAlign:"center", fontSize:13, color:t.textMid }}>📂 Choisir un fichier .json</div>
+            <input type="file" accept=".json" onChange={handleImport} style={{ display:"none" }} />
+          </label>
+          {importError && <div style={{ fontSize:12,color:t.danger,marginTop:8 }}>{importError}</div>}
+          {importConfirm && (
+            <div style={{ marginTop:12, padding:14, background:t.dangerLight, borderRadius:t.radiusSm, border:`1px solid ${t.danger}44` }}>
+              <div style={{ fontSize:13,fontWeight:600,color:t.danger,marginBottom:8 }}>⚠️ Cette action remplacera toutes les données actuelles.</div>
+              <div style={{ fontSize:12,color:t.textMid,marginBottom:12 }}>Fichier du {new Date(importConfirm.exportedAt).toLocaleDateString("fr-FR")} — {importConfirm.events?.length || 0} événements, {importConfirm.persons?.length || 0} personnes</div>
+              <div style={{ display:"flex",gap:10 }}>
+                <Btn onClick={() => setImportConfirm(false)} variant="ghost" small style={{flex:1}}>Annuler</Btn>
+                <Btn onClick={() => { onImport(importConfirm); setImportConfirm(false); }} variant="danger" small style={{flex:1}}>Confirmer l'import</Btn>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }
@@ -916,6 +968,12 @@ function PixieApp() {
   useEffect(()=>{ if(loaded) save("pixie-ob4",observations); },[observations,loaded]);
   useEffect(()=>{ if(loaded) save("pixie-nf4",notifEnabled); },[notifEnabled,loaded]);
 
+  const handleImport = (data) => {
+    if (data.events) setEvents(data.events);
+    if (data.persons) setPersons(data.persons);
+    if (data.avails) setAvails(data.avails);
+    if (data.observations) setObservations(data.observations.filter(o=>o.expires>=todayStr()));
+  };
   const pendingBadge = role==="guardian" ? avails.filter(a=>a.date>=todayStr()&&!Object.keys(a.responses).length).length : 0;
   const handleNotify = (targetRole,title,body) => { if(role!==targetRole&&notifEnabled) sendNotif(title,body); };
   const TABS_O = [{id:"calendar",label:"Calendrier",icon:"📅"},{id:"avail",label:"Dispos",icon:"🤝"},{id:"persons",label:"Personnes",icon:"👥"},{id:"share",label:"Partager",icon:"📤"},{id:"pension",label:"Pension",icon:"🏡",soon:true},{id:"settings",label:"Réglages",icon:"⚙️"}];
@@ -966,7 +1024,7 @@ function PixieApp() {
         {tab==="avail" && <AvailView avails={avails} setAvails={setAvails} role={role} persons={persons} onNotify={handleNotify} />}
         {tab==="persons" && role==="owner" && <PersonsView persons={persons} setPersons={setPersons} />}
         {tab==="share" && role==="owner" && <ShareView events={events} persons={persons} observations={observations} />}
-        {tab==="settings" && <SettingsView notifEnabled={notifEnabled} setNotifEnabled={setNotifEnabled} role={role} />}
+        {tab==="settings" && <SettingsView notifEnabled={notifEnabled} setNotifEnabled={setNotifEnabled} role={role} events={events} persons={persons} avails={avails} observations={observations} onImport={handleImport} />}
         {tab==="pension" && role==="owner" && <PensionView />}
       </div>
       <div style={{ position:"fixed",zIndex:90,bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:600,background:t.card,borderTop:`1px solid ${t.border}`,display:"flex",padding:"8px 0 14px" }}>
